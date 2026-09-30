@@ -148,8 +148,9 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { software: sw };
   }, { role: 'lecture' });
   r.get('/api/machines/:ref/jobs', ctx => {
-    session(ctx); const id = machine(ctx.params.ref);
-    return { jobs: taches.liste(id, 25).map(t => parc.tachePublique(t)) };
+    const s = session(ctx); const id = machine(ctx.params.ref);
+    const admin = s.compteLigne.role === 'admin';
+    return { jobs: taches.liste(id, 25).map(t => parc.tachePublique(t, { admin })) };
   }, { role: 'lecture' });
   r.post('/api/machines/:ref/jobs', async ctx => {
     const hub = estHub(ctx);

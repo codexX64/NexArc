@@ -223,8 +223,10 @@ export class Parc {
       dernier_statut: a.dernier_statut || '', runs: a.runs || 0,
     };
   }
-  tachePublique(t) {
-    return { id: t.ref, kind: t.kind, payload: t.sensible ? '' : t.payload, status: t.status, output: t.output || '', rc: t.rc, cree: t.cree, fin: t.fin, auteur: t.auteur || '' };
+  // Une commande libre n'est rendue à personne ; ce qu'elle a affiché, à un
+  // administrateur seulement, comme la commande elle-même ne part que de lui.
+  tachePublique(t, { admin = false } = {}) {
+    return { id: t.ref, kind: t.kind, payload: t.sensible ? '' : t.payload, status: t.status, output: t.sensible && !admin ? '' : t.output || '', rc: t.rc, cree: t.cree, fin: t.fin, auteur: t.auteur || '' };
   }
 
   // ---- écriture des consoles, avec scellage des mots de passe VNC ----

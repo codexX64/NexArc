@@ -351,6 +351,13 @@ test('commande libre : rôle admin + renfort ; un membre ne peut pas', async () 
   // la charge sensible n'est pas rendue en clair dans la liste
   const jobs = (await admin.get(`/api/machines/${mref}/jobs`)).json.jobs;
   assert.equal(jobs.find(j => j.id === r.json.id).payload, '', 'commande libre non rendue en clair');
+  // ce qu'elle a affiché ne va qu'à un administrateur
+  assert.equal((await membre.req('POST', '/api/agent/jobs', {}, { entetes: { 'x-agent-token': en.jeton }, origine: null })).status, 200);
+  assert.equal((await membre.req('POST', `/api/agent/jobs/${r.json.id}/result`, { output: 'sortie sensible de la commande', rc: 0 }, { entetes: { 'x-agent-token': en.jeton }, origine: null })).status, 200);
+  const sortie = async c => (await c.get(`/api/machines/${mref}/jobs`)).json.jobs.find(j => j.id === r.json.id).output;
+  assert.equal(await sortie(admin), 'sortie sensible de la commande');
+  assert.equal(await sortie(membre), '', 'un membre ne lit pas la sortie d\'une commande libre');
+  assert.equal(await sortie(lecteur), '', 'la lecture seule non plus');
 });
 
 test('pont VNC : authentification DES côté serveur, puis poignée None au navigateur', async () => {
