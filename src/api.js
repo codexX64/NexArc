@@ -197,6 +197,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if (item.type === 'mesh') {
       if (!meshActif()) throw new ErreurHttp(503, 'MeshCentral non configuré.');
       const url = urlBureau(item.target, { meshUrl: cfg.meshUrl, user: cfg.meshUser, cle: cfg.meshCle, viewmode: cfg.meshViewmode, hide: cfg.meshHide });
+      // Avec la clé de connexion, l'adresse porte un jeton de bureau distant.
+      journal.ecrire({ acteur: ctx.session.compte, action: 'console.ouverte', objet: m.host, ip: ctx.ip, details: { type: 'mesh', idx } });
       return { url, embed: cfg.meshEmbed, label: item.label, type: 'mesh' };
     }
     if (item.embed && consoles) {
@@ -342,6 +344,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       methodes.push(`${a.role === 'relais' ? 'relais' : 'poste'} ${a.host}`);
     }
     if (!methodes.length) throw new ErreurHttp(409, 'Aucun relais en ligne sur ce segment. Ajoute un nœud relais (ex. Raspberry Pi) dans ce VLAN.');
+    journal.ecrire({ acteur: hub ? 'hub' : ctx.session.compte, action: 'reveil', objet: m.host, ip: ctx.ip, details: { methodes: methodes.length } });
     synapse?.reveil(m.host, methodes);
     return { ok: true, mac, methods: methodes };
   }, { hub: true, role: 'membre' });

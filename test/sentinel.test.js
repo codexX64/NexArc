@@ -457,6 +457,16 @@ test('réveil réseau : paquet magique bien formé et capturé ; sans relais en 
   const mref = refMachineParHote('poste-wol');
   const r = await membre.post(`/api/machines/${mref}/wake`);
   assert.ok([409].includes(r.status), 'MAC inconnue → 409');
+  // Avec l'adresse MAC relevée par l'inventaire, le relais du segment émet.
+  const cible = await enroler(membre, { hostname: 'poste-a-reveiller' });
+  assert.equal((await membre.req('POST', '/api/ingest', { hostname: 'poste-a-reveiller', ip: '198.51.100.10', oskind: 'lin', cpu: 1, ram: 1, disk: 1, inventory: { nics: [{ name: 'eth0', ip: '198.51.100.10', mac: '01-23-45-67-89-AB' }] } }, { entetes: { 'x-agent-token': cible.jeton }, origine: null })).status, 200);
+  await enroler(membre, { hostname: 'relais-a', relais: true });
+  const reveil = await membre.post(`/api/machines/${refMachineParHote('poste-a-reveiller')}/wake`);
+  assert.equal(reveil.status, 200, JSON.stringify(reveil.json));
+  assert.equal(reveil.json.methods[0], 'relais relais-a', 'le relais d\'abord');
+  const idRelais = s.parc.idDe(refMachineParHote('relais-a'));
+  assert.deepEqual({ ...s.parc.db.prepare("SELECT kind, payload FROM taches WHERE machine_id = ? AND kind = 'wol'").get(idRelais) }, { kind: 'wol', payload: '01:23:45:67:89:ab|198.51.100.255' });
+  assert.equal(s.parc.db.prepare("SELECT COUNT(*) n FROM socle_journal WHERE action = 'reveil' AND objet = 'poste-a-reveiller'").get().n, 1, 'réveil journalisé');
 });
 
 test('consoles : mot de passe VNC scellé (admin+renfort), jamais rendu ; la cible du pont est côté serveur', async () => {
