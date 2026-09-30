@@ -114,7 +114,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     // Commande libre : rôle admin + renfort récent, et seulement si activée.
     if (b.kind === 'cmd') {
       if (hub) throw new ErreurHttp(403, 'Une commande libre passe par un opérateur, jamais par le Hub.');
-      if (!cfg.commandeLibre) throw new ErreurHttp(503, 'Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
+      if (!cfg.commandeLibre) throw new ErreurHttp(403, 'Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
       portail.exiger(ctx, { role: 'admin', renfort: true });
     }
     if (b.kind !== 'inventory' && !b.payload.trim()) throw new ErreurHttp(422, 'Commande ou paquet manquant.');
@@ -289,10 +289,18 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   // ───────── automatisations ─────────
   r.get('/api/automations', ctx => { session(ctx); return { automations: db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(a => parc.autoPublique(a)) }; }, { role: 'lecture' });
+  // Une automatisation « commande libre » est une commande libre répétée : même
+  // réglage (SENTINEL_ALLOW_EXEC), même rôle, même renfort, à chaque geste qui
+  // la fait exister ou exécuter.
+  const commandeLibre = (ctx, kind) => {
+    if (kind !== 'cmd') return;
+    if (!cfg.commandeLibre) throw new ErreurHttp(403, 'Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
+    portail.exiger(ctx, { role: 'admin', renfort: true });
+  };
   r.post('/api/automations', async ctx => {
     session(ctx, { role: 'membre' });   // auth d'abord : anon → 401, lecture → 403
     const b = await corps(ctx, S.auto);
-    if (b.kind === 'cmd') portail.exiger(ctx, { role: 'admin', renfort: true });
+    commandeLibre(ctx, b.kind);
     if (b.kind !== 'inventory' && b.kind !== 'update' && !b.payload.trim()) throw new ErreurHttp(422, 'Commande ou paquet requis.');
     if (b.cible !== 'tous' && !b.cible_val.trim()) throw new ErreurHttp(422, 'Précise la cible.');
     const ref = crypto.randomBytes(12).toString('base64url');
@@ -303,24 +311,30 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }, { role: 'membre' });
   r.put('/api/automations/:ref', ctx => {
     session(ctx, { role: 'membre' });
-    const a = db.prepare('SELECT id FROM automatisations WHERE ref = ?').get(ctx.params.ref);
+    const a = db.prepare('SELECT id, nom, kind FROM automatisations WHERE ref = ?').get(ctx.params.ref);
     if (!a) throw new ErreurHttp(404, 'Automatisation introuvable.');
     const actif = ctx.url.searchParams.get('enabled') !== 'false';
+    if (actif) commandeLibre(ctx, a.kind);
+    else if (a.kind === 'cmd') portail.exiger(ctx, { role: 'admin', renfort: true });
     db.prepare('UPDATE automatisations SET actif = ? WHERE id = ?').run(actif ? 1 : 0, a.id);
+    journal.ecrire({ acteur: ctx.session.compte, action: actif ? 'automatisation.activee' : 'automatisation.suspendue', objet: a.nom, ip: ctx.ip, details: { kind: a.kind } });
     return { automations: db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(x => parc.autoPublique(x)) };
   }, { role: 'membre' });
   r.del('/api/automations/:ref', ctx => {
-    session(ctx, { role: 'membre' });
-    const a = db.prepare('SELECT id FROM automatisations WHERE ref = ?').get(ctx.params.ref);
-    if (a) db.prepare('DELETE FROM automatisations WHERE id = ?').run(a.id);
+    session(ctx, { role: 'admin', renfort: true });
+    const a = db.prepare('SELECT id, nom, kind FROM automatisations WHERE ref = ?').get(ctx.params.ref);
+    if (a) {
+      db.prepare('DELETE FROM automatisations WHERE id = ?').run(a.id);
+      journal.ecrire({ acteur: ctx.session.compte, action: 'automatisation.supprimee', objet: a.nom, ip: ctx.ip, details: { kind: a.kind } });
+    }
     return { automations: db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(x => parc.autoPublique(x)) };
-  }, { role: 'membre' });
+  }, { role: 'admin' });
   r.post('/api/automations/:ref/run', ctx => {
     session(ctx, { role: 'membre' });
     const a = db.prepare('SELECT * FROM automatisations WHERE ref = ?').get(ctx.params.ref);
     if (!a) throw new ErreurHttp(404, 'Automatisation introuvable.');
-    if (a.kind === 'cmd') portail.exiger(ctx, { role: 'admin', renfort: true });
-    const n = taches.lancer(a);
+    commandeLibre(ctx, a.kind);
+    const n = taches.lancer(a, { acteur: ctx.session.compte });
     return { ok: true, queued: n };
   }, { role: 'membre' });
 

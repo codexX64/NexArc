@@ -67,7 +67,7 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
     seuils: { horsLigneMin: cfg.alerteHorsLigneMin, correctifsJours: cfg.alerteCorrectifsJours, disquePct: cfg.alerteDisquePct, risque: cfg.alerteRisque },
   });
   const agents = new Agents(db, { parc, maxMachines: cfg.maxMachines, synapse, alertes, flux: l => flux.pousser({ t: 'flux', ...l }) });
-  const taches = new Taches(db, { parc, synapse, journal: socle.journal, flux });
+  const taches = new Taches(db, { parc, synapse, journal: socle.journal, flux, commandeLibre: cfg.commandeLibre });
   const api = creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine: RACINE });
   // Données d'un compte : exportées à sa demande, neutralisées à sa suppression.
   socle.portail.exporteur = compteId => parc.donneesDe(compteId);

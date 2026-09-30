@@ -12,8 +12,8 @@ export const KINDS = new Set(['cmd', 'install', 'uninstall', 'inventory', 'updat
 export const CIBLES = new Set(['tous', 'site', 'host', 'oskind']);
 
 export class Taches {
-  constructor(db, { parc, synapse, journal, flux }) {
-    this.db = db; this.parc = parc; this.synapse = synapse; this.journal = journal; this.flux = flux;
+  constructor(db, { parc, synapse, journal, flux, commandeLibre = false }) {
+    this.db = db; this.parc = parc; this.synapse = synapse; this.journal = journal; this.flux = flux; this.commandeLibre = commandeLibre;
   }
 
   // auteur : ce qui s'affiche (identifiant, « hub »), auteurCompte : le compte
@@ -68,7 +68,7 @@ export class Taches {
     return this.db.prepare(q).all(...args).map(r => r.id);
   }
 
-  lancer(row, now = secondes()) {
+  lancer(row, { acteur = null, now = secondes() } = {}) {
     const ids = this.ciblesDe(row);
     const sensible = row.kind === 'cmd';
     for (const mid of ids) {
@@ -78,19 +78,21 @@ export class Taches {
     }
     this.db.prepare('UPDATE automatisations SET dernier_run=?, runs=runs+1, dernier_statut=? WHERE id=?')
       .run(now, ids.length ? `${ids.length} poste(s)` : 'aucun poste', row.id);
-    this.journal?.ecrire({ action: 'automatisation.lancee', objet: row.nom, details: { kind: row.kind, postes: ids.length } });
+    this.journal?.ecrire({ acteur, action: 'automatisation.lancee', objet: row.nom, details: { kind: row.kind, postes: ids.length } });
     if (ids.length) this.synapse?.automatisation(row.nom, row.kind, ids.length);
     return ids.length;
   }
 
-  // Toutes les minutes : les automatisations dues sont lancées.
+  // Toutes les minutes : les automatisations dues sont lancées. Une commande
+  // libre ne part que si SENTINEL_ALLOW_EXEC l'autorise encore : une
+  // automatisation créée avant qu'on la désactive (ou reprise de la 1.x) attend.
   tour() {
     const now = secondes();
     const heure = new Date().getHours();
-    for (const row of this.db.prepare('SELECT * FROM automatisations WHERE actif = 1').all()) {
+    for (const row of this.db.prepare("SELECT * FROM automatisations WHERE actif = 1 AND (kind <> 'cmd' OR ?)").all(this.commandeLibre ? 1 : 0)) {
       const due = (now - (row.dernier_run || 0)) >= row.toutes_h * 3600;
       if (row.toutes_h >= 24 && heure !== (row.heure || 0)) continue;
-      if (due) this.lancer(row, now);
+      if (due) this.lancer(row, { now });
     }
   }
 }

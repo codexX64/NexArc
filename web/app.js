@@ -282,25 +282,29 @@ async function pageAutos() {
     h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'Automatisations actives' }), h('span', { class: 'note', text: `${E.autos.filter(a => a.actif).length} / ${E.autos.length}` })), liste));
 }
 function ligneAuto(a) {
+  // Une commande libre répétée, comme toute suppression, reste à l'administrateur.
+  const pilotable = admin || a.kind !== 'cmd';
   const acts = [
-    { texte: 'Lancer', agir: async () => { const r = await api.post(`/api/automations/${a.id}/run`); toast(`${r.queued} tâche(s) envoyée(s).`); } },
-    { texte: a.actif ? 'Suspendre' : 'Activer', agir: async () => { E.autos = (await api.put(`/api/automations/${a.id}?enabled=${a.actif ? 'false' : 'true'}`)).automations; aller('autos'); } },
-    { texte: 'Supprimer', danger: true, agir: async () => { if (await confirmer('Supprimer ?', 'Cette automatisation ne s\'exécutera plus.', { danger: true, oui: 'Supprimer' })) { E.autos = (await api.del(`/api/automations/${a.id}`)).automations; aller('autos'); } } },
+    ...(pilotable ? [
+      { texte: 'Lancer', agir: async () => { const r = await api.post(`/api/automations/${a.id}/run`); toast(`${r.queued} tâche(s) envoyée(s).`); } },
+      { texte: a.actif ? 'Suspendre' : 'Activer', agir: async () => { E.autos = (await api.put(`/api/automations/${a.id}?enabled=${a.actif ? 'false' : 'true'}`)).automations; aller('autos'); } },
+    ] : []),
+    ...(admin ? [{ texte: 'Supprimer', danger: true, agir: async () => { if (await confirmer('Supprimer ?', 'Cette automatisation ne s\'exécutera plus.', { danger: true, oui: 'Supprimer' })) { E.autos = (await api.del(`/api/automations/${a.id}`)).automations; aller('autos'); } } }] : []),
   ];
   const sur = fn => async () => { try { await fn(); } catch (e) { toast(e.message, true); } };
   return h('div', { class: 'flowrow' },
     h('span', { class: 'itile ' + (a.actif ? 'key' : '') }, icone('eclair')),
     h('div', {}, h('strong', { text: a.nom }), h('small', { text: `${AU_KIND[a.kind] || a.kind}${a.payload ? ' · ' + a.payload.slice(0, 40) : ''} · ${cibleTexte(a)} · ${rythmeTexte(a)}` })),
     h('div', { class: 'fin' },
-      peutAgir ? acts.map(x => h('button', { class: 'btn sm flat cache-s' + (x.danger ? ' danger' : ''), type: 'button', onclick: sur(x.agir), text: x.texte })) : h('span', { class: 'mono dim', text: a.runs ? `${a.dernier_statut} · ${a.runs}×` : 'jamais' }),
-      peutAgir ? h('button', { class: 'btn sm flat seul-s', type: 'button', 'aria-label': 'Actions', onclick: sur(() => feuille(a.nom, acts)) }, icone('actions', 16)) : null));
+      peutAgir && acts.length ? acts.map(x => h('button', { class: 'btn sm flat cache-s' + (x.danger ? ' danger' : ''), type: 'button', onclick: sur(x.agir), text: x.texte })) : h('span', { class: 'mono dim', text: a.runs ? `${a.dernier_statut} · ${a.runs}×` : 'jamais' }),
+      peutAgir && acts.length ? h('button', { class: 'btn sm flat seul-s', type: 'button', 'aria-label': 'Actions', onclick: sur(() => feuille(a.nom, acts)) }, icone('actions', 16)) : null));
 }
 function cibleTexte(a) { return { tous: 'tous les postes', site: 'site ' + a.cible_val, oskind: 'systèmes ' + a.cible_val, host: 'poste ' + a.cible_val }[a.cible] || a.cible; }
 function rythmeTexte(a) { const h2 = a.toutes_h; const base = h2 < 24 ? (h2 === 1 ? 'toutes les heures' : `toutes les ${h2} h`) : h2 === 24 ? 'chaque jour' : h2 === 168 ? 'chaque semaine' : `toutes les ${Math.round(h2 / 24)} j`; return base + (h2 >= 24 ? ` à ${String(a.heure).padStart(2, '0')}h` : ''); }
 function boutonNouvelleAuto(peindre) {
   return h('button', { class: 'btn solid', type: 'button', onclick: async () => {
     const nom = h('input', { class: 'field', maxlength: 60, placeholder: 'Nom (ex. Mises à jour de sécurité)' });
-    const kind = h('select', { class: 'field' }, Object.entries(AU_KIND).map(([v, t]) => h('option', { value: v, text: t })));
+    const kind = h('select', { class: 'field' }, Object.entries(AU_KIND).filter(([v]) => admin || v !== 'cmd').map(([v, t]) => h('option', { value: v, text: t })));
     const payload = h('input', { class: 'field', placeholder: 'Commande ou paquet (vide = toutes les mises à jour)' });
     const cible = h('select', { class: 'field' }, [['tous', 'Tous les postes'], ['site', 'Un site'], ['oskind', 'Un système'], ['host', 'Un poste']].map(([v, t]) => h('option', { value: v, text: t })));
     const cibleVal = h('input', { class: 'field hide', placeholder: 'Valeur (site / lin / nom du poste)' });

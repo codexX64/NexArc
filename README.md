@@ -16,7 +16,9 @@ Projet [CodexX64](https://github.com/CodexX64). Licence MIT.
   mise à jour, réveil, et — réservée aux administrateurs, sous confirmation
   récente — la commande libre. L'agent ne relève et ne rend que **ses** tâches.
 - **Automatisations** : une tâche répétée sur un groupe (tout le parc, un site,
-  un système, un hôte), à intervalle ou à heure fixe.
+  un système, un hôte), à intervalle ou à heure fixe. Une commande libre
+  répétée suit les mêmes règles que la commande libre ; supprimer une
+  automatisation revient à un administrateur.
 - **Alertes** dérivées de ce que les agents remontent : machine hors ligne,
   antivirus absent ou inactif, pare-feu inactif, disque non chiffré, correctifs
   de sécurité en attente, disque plein, score de risque. Une alerte par machine
@@ -270,7 +272,7 @@ socle.
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `SENTINEL_HUB_TOKEN` | jeton du Hub : état, tâches, réveils — jamais les comptes ni les réglages | — |
-| `SENTINEL_ALLOW_EXEC` | `1` autorise la commande libre (toujours admin + confirmation récente) | `0` |
+| `SENTINEL_ALLOW_EXEC` | `1` autorise la commande libre, en tâche comme en automatisation (toujours admin + confirmation récente) ; à `0`, une automatisation « commande libre » existante ne s'exécute plus | `0` |
 | `SENTINEL_MAX_MACHINES` | plafond de machines | `5000` |
 | `SENTINEL_INGEST_MINUTE` | remontées d'agent par minute et par IP | `240` |
 | `SENTINEL_COLLECT_INTERVAL` | cadence de la boucle de collecte (s) | `30` |

@@ -172,7 +172,7 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
   // La politique écrite ici plutôt que relue dans le routeur : une route
   // d'administration relâchée par erreur fait échouer cet essai.
   const admin = s.api.routeur.routes.filter(r => r.options?.role === 'admin').map(r => `${r.methode} ${cheminDe(r)}`).sort();
-  assert.deepEqual(admin, ['DELETE /api/machines/AAAAAAAAAAAAAAAA', 'GET /api/machines/AAAAAAAAAAAAAAAA/pin', 'POST /api/hosts', 'POST /api/machines/AAAAAAAAAAAAAAAA/pin',
+  assert.deepEqual(admin, ['DELETE /api/automations/AAAAAAAAAAAAAAAA', 'DELETE /api/machines/AAAAAAAAAAAAAAAA', 'GET /api/machines/AAAAAAAAAAAAAAAA/pin', 'POST /api/hosts', 'POST /api/machines/AAAAAAAAAAAAAAAA/pin',
     'PUT /api/machines/AAAAAAAAAAAAAAAA/consoles', 'PUT /api/machines/AAAAAAAAAAAAAAAA/mesh-node', 'PUT /api/machines/AAAAAAAAAAAAAAAA/redfish']);
   // Le mandataire des consoles, hors routeur : session exigée.
   assert.equal((await anonyme.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 401);
@@ -356,10 +356,38 @@ test('automatisations : création, activation, exécution ; un cmd exige l\'admi
   const ref = a.json.automations.find(x => x.nom === 'Inventaire nuit').id;
   assert.equal((await membre.post(`/api/automations/${ref}/run`)).status, 200);
   assert.equal((await membre.put(`/api/automations/${ref}?enabled=false`)).status, 200);
-  assert.equal((await membre.del(`/api/automations/${ref}`)).status, 200);
-  // une automatisation « commande libre » demande le rôle admin
+  assert.equal((await membre.del(`/api/automations/${ref}`)).status, 403, 'une suppression revient à l\'administrateur');
+  assert.equal((await admin.del(`/api/automations/${ref}`)).status, 200);
+  const traces = s.parc.db.prepare("SELECT action FROM socle_journal WHERE objet = 'Inventaire nuit' ORDER BY n").all().map(l => l.action);
+  assert.deepEqual(traces, ['automatisation.creee', 'automatisation.lancee', 'automatisation.suspendue', 'automatisation.supprimee']);
+  // une automatisation « commande libre » demande le rôle admin, à chaque geste
   assert.equal((await membre.post('/api/automations', { nom: 'Cmd', kind: 'cmd', payload: 'id', cible: 'tous' })).status, 403);
-  assert.equal((await admin.post('/api/automations', { nom: 'Cmd', kind: 'cmd', payload: 'id', cible: 'tous' })).status, 200);
+  const c = await admin.post('/api/automations', { nom: 'Cmd', kind: 'cmd', payload: 'id', cible: 'tous' });
+  assert.equal(c.status, 200);
+  const cref = c.json.automations.find(x => x.nom === 'Cmd').id;
+  assert.equal((await membre.post(`/api/automations/${cref}/run`)).status, 403);
+  assert.equal((await membre.put(`/api/automations/${cref}?enabled=false`)).status, 403);
+  assert.equal((await membre.put(`/api/automations/${cref}?enabled=true`)).status, 403);
+  assert.equal((await admin.del(`/api/automations/${cref}`)).status, 200);
+});
+
+test('commande libre désactivée : ni créée, ni lancée, ni réactivée, ni exécutée par la ronde des automatisations', async () => {
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-noexec-')), { SENTINEL_ALLOW_EXEC: '0' });
+  try {
+    const a = x.client();
+    await adminComplet(a, { jeton: INSTALL });
+    const { jeton } = await enroler(a, { hostname: 'poste-sans-cmd' });
+    assert.ok(jeton);
+    assert.equal((await a.post('/api/automations', { nom: 'Cmd', kind: 'cmd', payload: 'id', cible: 'tous' })).status, 403);
+    // Une automatisation « commande libre » d'avant la désactivation (ou reprise de la 1.x).
+    x.db.prepare("INSERT INTO automatisations(ref, nom, kind, payload, cible, toutes_h, heure, actif) VALUES('EEEEEEEEEEEEEEEE', 'Ancienne', 'cmd', 'id', 'tous', 1, 0, 0)").run();
+    x.db.prepare("INSERT INTO automatisations(ref, nom, kind, payload, cible, toutes_h, heure, actif) VALUES('FFFFFFFFFFFFFFFF', 'Inventaire', 'inventory', '', 'tous', 1, 0, 1)").run();
+    assert.equal((await a.put('/api/automations/EEEEEEEEEEEEEEEE?enabled=true')).status, 403);
+    assert.equal((await a.post('/api/automations/EEEEEEEEEEEEEEEE/run')).status, 403);
+    x.db.prepare("UPDATE automatisations SET actif = 1 WHERE ref = 'EEEEEEEEEEEEEEEE'").run();
+    x.taches.tour();
+    assert.deepEqual(x.db.prepare('SELECT kind FROM taches').all().map(t => t.kind), ['inventory'], 'la ronde laisse la commande libre de côté');
+  } finally { await x.arreter(); }
 });
 
 test('le jeton du Hub n\'ouvre que l\'état, les tâches et le réveil', async () => {
