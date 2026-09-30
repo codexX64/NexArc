@@ -103,16 +103,17 @@ export async function captureUdp() {
   return { port: s.address().port, paquets, fermer: () => new Promise(f => s.close(f)) };
 }
 
-// Carte Redfish en HTTP : exige ses identifiants (Basic), expose un système et
-// son action Reset. `actions` garde les ResetType reçus, `refus` les accès sans
-// les bons identifiants.
+// Carte Redfish HTTPS au certificat auto-signé : exige ses identifiants
+// (Basic), expose un système et son action Reset. `actions` garde les
+// ResetType reçus, `refus` les accès sans les bons identifiants.
 export async function fauxRedfish({ utilisateur = 'root', motDePasse = 'motdepasse-carte' } = {}) {
+  const c = certificatEssai('carte-redfish');
   const actions = [];
   let refus = 0;
   const attendu = 'Basic ' + Buffer.from(`${utilisateur}:${motDePasse}`).toString('base64');
   const systeme = '/redfish/v1/Systems/1', reset = `${systeme}/Actions/ComputerSystem.Reset`;
-  const s = http.createServer((req, res) => {
-    let corps = ''; req.on('data', c => { corps += c; }); req.on('end', () => {
+  const s = https.createServer({ key: c.cle, cert: c.cert }, (req, res) => {
+    let corps = ''; req.on('data', morceau => { corps += morceau; }); req.on('end', () => {
       if (req.headers.authorization !== attendu) { refus++; res.writeHead(401); return res.end(); }
       const json = o => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
       if (req.method === 'GET' && req.url === '/redfish/v1/Systems') return json({ Members: [{ '@odata.id': systeme }] });
@@ -124,7 +125,7 @@ export async function fauxRedfish({ utilisateur = 'root', motDePasse = 'motdepas
     });
   });
   await new Promise(r => s.listen(0, '127.0.0.1', r));
-  return { url: `http://127.0.0.1:${s.address().port}`, actions, refus: () => refus, fermer: () => new Promise(f => s.close(f)) };
+  return { url: `https://127.0.0.1:${s.address().port}`, actions, refus: () => refus, fermer: () => new Promise(f => { s.close(f); s.closeAllConnections(); }) };
 }
 
 // Serveur TLS auto-signé qui compte, par connexion, les octets applicatifs

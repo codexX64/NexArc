@@ -3,9 +3,9 @@
 // Redfish est exposé par toute carte moderne : Sentinel lit l'état
 // d'alimentation et agit dessus sans ouvrir l'interface de la carte, et sans
 // licence Enterprise (celle-ci ne verrouille que la console virtuelle, pas
-// l'alimentation). Les identifiants sont scellés par le Coffre du socle ; le
-// certificat auto-signé de la carte est épinglé (voir tls.js) et vérifié.
-import http from 'node:http';
+// l'alimentation). Les identifiants sont scellés par le Coffre du socle, et ne
+// partent qu'en HTTPS : le certificat auto-signé de la carte est épinglé (voir
+// tls.js) et vérifié.
 import https from 'node:https';
 import { agentEpingle } from './tls.js';
 import { hoteInterdit, lookupGarde } from './reseau.js';
@@ -23,18 +23,15 @@ export const LIBELLES = { on: 'Allumer', off: 'Éteindre (forcé)', arret: 'Arr�
 
 function requete(base, chemin, { user, password, pin, methode = 'GET', corps = null, timeout = 20000 } = {}) {
   const u = new URL(base.replace(/\/+$/, '') + chemin);
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('schéma refusé');
+  if (u.protocol !== 'https:') throw new Error('schéma refusé : HTTPS exigé');
+  if (!pin) throw new Error('certificat non épinglé : confirme l\'empreinte de la carte');
   if (hoteInterdit(u.hostname)) throw new Error('adresse interdite');
   const entetes = { authorization: 'Basic ' + Buffer.from(`${user}:${password}`).toString('base64'), accept: 'application/json' };
   let data = null;
   if (corps) { data = JSON.stringify(corps); entetes['content-type'] = 'application/json'; entetes['content-length'] = Buffer.byteLength(data); }
-  const opts = { method: methode, headers: entetes, timeout, lookup: lookupGarde };
-  if (u.protocol === 'https:') {
-    if (!pin) throw new Error('certificat non épinglé : confirme l\'empreinte de la carte');
-    opts.agent = agentEpingle(pin);
-  }
+  const opts = { method: methode, headers: entetes, timeout, lookup: lookupGarde, agent: agentEpingle(pin) };
   return new Promise((resolve, reject) => {
-    const req = (u.protocol === 'https:' ? https : http).request(u, opts, res => {
+    const req = https.request(u, opts, res => {
       const morceaux = []; let taille = 0;
       res.on('data', c => { taille += c.length; if (taille > 512 * 1024) { req.destroy(new Error('réponse trop volumineuse')); } else morceaux.push(c); });
       res.on('end', () => {

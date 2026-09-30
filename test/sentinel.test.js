@@ -377,8 +377,24 @@ test('Redfish : identifiants scellés jamais rendus ; alimentation refusée tant
     assert.ok(!s.parc.db.prepare('SELECT rf_secret FROM machines WHERE ref=?').get(mref).rf_secret.includes('motdepasse-carte'), 'scellé en base');
     // sans épinglage : l'alimentation est refusée (409), jamais rejectUnauthorized:false
     assert.equal((await membre.get(`/api/machines/${mref}/power`)).status, 409);
+    // Basic sur HTTP : l'identifiant circulerait en clair, refusé à la pose.
+    const clair = await admin.put(`/api/machines/${mref}/redfish`, { url: `http://127.0.0.1:${carte.port}`, user: 'root', password: 'motdepasse-carte' });
+    assert.equal(clair.status, 422);
+    assert.match(clair.json.error, /https/);
+    // Une adresse en HTTP reprise d'une 1.x : jamais jointe.
+    s.parc.db.prepare('UPDATE machines SET rf_url = ? WHERE ref = ?').run(`http://127.0.0.1:${carte.port}`, mref);
+    const reprise = await membre.get(`/api/machines/${mref}/power`);
+    assert.equal(reprise.status, 409);
+    assert.match(reprise.json.error, /https/);
   } finally { await carte.fermer(); }
 });
+
+// Épingle le certificat de la carte Redfish d'une machine, comme l'administrateur.
+async function epinglerRedfish(client, mref) {
+  const vu = await client.get(`/api/machines/${mref}/pin?redfish=1`);
+  assert.equal(vu.status, 200, JSON.stringify(vu.json));
+  assert.equal((await client.post(`/api/machines/${mref}/pin`, { redfish: true, fp: vu.json.fp })).status, 200);
+}
 
 test('réveil réseau : paquet magique bien formé et capturé ; sans relais en ligne, 409', async () => {
   assert.equal(sousReseau('198.51.100.10'), '198.51.100');
@@ -820,6 +836,7 @@ test('alimentation : allumer reste au membre ; couper, arrêter, redémarrer, fo
     await enroler(membre, { hostname: 'srv-alim' });
     const mref = refMachineParHote('srv-alim');
     assert.equal((await admin.put(`/api/machines/${mref}/redfish`, { url: carte.url, user: 'root', password: 'motdepasse-carte' })).status, 200);
+    await epinglerRedfish(admin, mref);
     const etat = await membre.get(`/api/machines/${mref}/power`);
     assert.equal(etat.status, 200, JSON.stringify(etat.json));
     assert.equal(etat.json.power, 'On');
@@ -918,6 +935,7 @@ test('rotation de SOCLE_CLE : secrets d\'appareils rescellés, jetons d\'agents 
     const ref = x.db.prepare("SELECT ref FROM machines WHERE host = 'srv-rotation'").get().ref;
     assert.equal((await a.put(`/api/machines/${ref}/consoles`, { consoles: [{ type: 'vnc', target: '198.51.100.60:5900', label: 'KVM', vncpw: 'vnc-avant-rotation' }] })).status, 200);
     assert.equal((await a.put(`/api/machines/${ref}/redfish`, { url: carte.url, user: 'root', password: 'motdepasse-carte' })).status, 200);
+    await epinglerRedfish(a, ref);
     const avant = x.db.prepare('SELECT consoles, rf_secret FROM machines WHERE ref = ?').get(ref);
     const lisibles = inst => {
       const m = inst.parc.machineParRef(ref);
@@ -957,7 +975,7 @@ test('garde de sortie : métadonnées et plages réservées refusées, en litté
   assert.ok(bon.length >= 1);
   await enroler(membre, { hostname: 'srv-garde' });
   const mref = refMachineParHote('srv-garde');
-  assert.equal((await admin.put(`/api/machines/${mref}/redfish`, { url: 'http://169.254.169.254/redfish', user: 'root', password: 'x' })).status, 422);
+  assert.equal((await admin.put(`/api/machines/${mref}/redfish`, { url: 'https://169.254.169.254/redfish', user: 'root', password: 'x' })).status, 422);
   await assert.rejects(observer('169.254.169.254', 443), /interdite/);
 });
 

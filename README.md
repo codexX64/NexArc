@@ -172,7 +172,8 @@ puis retire les tables de l'ancienne version.
 - **Les secrets d'appareils** (mots de passe VNC, identifiants Redfish), scellés
   en 1.x sous une clé qui n'existe plus, ne sont pas repris : l'URL et
   l'utilisateur restent, l'administrateur ressaisit le secret, et réépingle le
-  certificat de la carte.
+  certificat de la carte. Une adresse Redfish en `http://` n'est plus jointe :
+  la déclarer en `https://`.
 
 Le conteneur ne tourne plus en `root`. Un volume créé par la version 1 doit
 donc changer de propriétaire une fois, avant le premier démarrage de la 2 :
@@ -253,8 +254,9 @@ de préférence : un autre port du même hôte sépare les scripts, pas les cook
 que les navigateurs ne distinguent pas par port. Sans `SENTINEL_CONSOLE_URL`,
 l'interface d'une carte s'ouvre dans un nouvel onglet, directement sur la carte.
 L'alimentation passe par Redfish sur les cartes qui le supportent (identifiants
-posés par un administrateur dans « Accès distants », certificat épinglé si la
-carte parle HTTPS). Allumer est ouvert au rôle membre, comme le réveil par le
+posés par un administrateur dans « Accès distants »). Redfish s'authentifie en
+Basic : la carte n'est jointe qu'à une adresse `https://`, sur son certificat
+épinglé, pour que ses identifiants ne circulent jamais en clair. Allumer est ouvert au rôle membre, comme le réveil par le
 réseau ; arrêter, forcer l'extinction, redémarrer ou faire un cycle
 interrompent un système en marche et exigent un administrateur sous
 confirmation récente.

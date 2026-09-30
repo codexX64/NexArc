@@ -287,13 +287,14 @@ export class Parc {
   poserPinRedfish(machineId, pin) {
     this.db.prepare('UPDATE machines SET rf_fp=? WHERE id=?').run(JSON.stringify(pin), machineId);
   }
+  // L'adresse Redfish posée, sinon celle de la console iDRAC, iLO ou IPMI.
+  redfishBase(m) {
+    return m.rf_url || this.consolesEffectives(m).find(c => ['idrac', 'ilo', 'ipmi'].includes(c.type))?.target || null;
+  }
   // (base, user, password, pin) pour joindre la carte, ou null si non configuré.
   redfishConf(m) {
     if (!m.rf_user || !m.rf_secret) return null;
-    let base = m.rf_url;
-    if (!base) {
-      for (const c of this.consolesEffectives(m)) if (['idrac', 'ilo', 'ipmi'].includes(c.type)) { base = c.target; break; }
-    }
+    const base = this.redfishBase(m);
     if (!base) return null;
     let password; try { password = this.coffre.ouvre('redfish', m.rf_secret, m.ref); } catch { return null; }
     let pin = null; try { pin = m.rf_fp ? JSON.parse(m.rf_fp) : null; } catch { pin = null; }

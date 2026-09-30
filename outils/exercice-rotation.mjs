@@ -85,6 +85,8 @@ await note(!!jetonAgent && await agentRemonte(jetonAgent), 'agent enrôlé : son
 const ref = (await a.get('/api/state')).json.machines.find(m => m.host === 'serveur-a')?.id;
 await note((await a.put(`/api/machines/${ref}/consoles`, { consoles: [{ type: 'vnc', target: `127.0.0.1:${rfb.port}`, label: 'KVM', vncpw: 'vnc-de-l-exercice' }] })).status === 200, 'mot de passe VNC enregistré (scellé)');
 await note((await a.put(`/api/machines/${ref}/redfish`, { url: carte.url, user: 'root', password: 'redfish-de-l-exercice' })).status === 200, 'identifiants Redfish enregistrés (scellés)');
+const vu = (await a.get(`/api/machines/${ref}/pin?redfish=1`)).json;
+await note((await a.post(`/api/machines/${ref}/pin`, { redfish: true, fp: vu?.fp })).status === 200, 'certificat de la carte Redfish épinglé');
 await note(await vncOuvre(a, ref), 'pont VNC : la console s’ouvre avec le mot de passe scellé');
 await note(await alimentationLue(a, ref), 'alimentation lue sur la carte Redfish');
 await arreter();

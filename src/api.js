@@ -21,6 +21,8 @@ const NOM_HOTE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$/;
 // Un refus d'accès décidé ici plutôt que par le socle : l'aiguillage le
 // journalise comme le socle journalise les siens.
 class Refus extends ErreurHttp {}
+
+const REDFISH_HTTPS = 'Redfish exige une adresse https:// : les identifiants de la carte ne circulent jamais en clair.';
 const refus = message => { throw new Refus(403, message); };
 
 const S = {
@@ -254,7 +256,9 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const id = machine(ctx.params.ref);
     const b = await corps(ctx, S.redfish);
     const url = (b.url || '').trim();
-    if (url && !/^https?:\/\//i.test(url)) throw new ErreurHttp(422, 'URL Redfish invalide.');
+    // Redfish s'authentifie en Basic : sans TLS, l'identifiant de la carte
+    // circulerait en clair sur le réseau.
+    if ((b.user || b.password) && !/^https:\/\//i.test(url || parc.redfishBase(parc.machine(id)) || '')) throw new ErreurHttp(422, REDFISH_HTTPS);
     if (url && cibleInterdite(url)) throw new ErreurHttp(422, 'Adresse interdite (métadonnées, lien local ou plage réservée).');
     if ((b.user || b.password) && !b.password) throw new ErreurHttp(422, 'Mot de passe requis.');
     parc.poserRedfish(id, { url, user: b.user, password: b.password });
@@ -264,9 +268,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   r.get('/api/machines/:ref/power', async ctx => {
     session(ctx, { role: 'membre' });
     const m = parc.machine(machine(ctx.params.ref));
-    const conf = parc.redfishConf(m);
-    if (!conf) throw new ErreurHttp(409, 'Contrôle d\'alimentation non configuré.');
-    if (/^https/i.test(conf.base) && !conf.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé : confirme son empreinte.');
+    const conf = redfishPret(m);
     return await redfish.etat(conf.base, { user: conf.user, password: conf.password, pin: conf.pin }).catch(carteEnEchec('Alimentation illisible', m));
   }, { role: 'membre' });
   // Allumer reste à la portée d'un membre (comme le réveil par le réseau) :
@@ -278,9 +280,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if (b.action !== 'on') portail.exiger(ctx, { role: 'admin', renfort: true });
     if (!debitPower.prendre(ctx.ip)) throw new ErreurHttp(429, 'Trop d\'actions, patiente un instant.');
     const m = parc.machine(machine(ctx.params.ref));
-    const conf = parc.redfishConf(m);
-    if (!conf) throw new ErreurHttp(409, 'Contrôle d\'alimentation non configuré.');
-    if (/^https/i.test(conf.base) && !conf.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé.');
+    const conf = redfishPret(m);
     const used = await redfish.agir(conf.base, { user: conf.user, password: conf.password, pin: conf.pin }, b.action).catch(carteEnEchec('Action non faite', m));
     synapse?.alimentation(m.host, b.action);
     journal.ecrire({ acteur: ctx.session.compte, action: 'alimentation', objet: m.host, ip: ctx.ip, details: { action: b.action } });
@@ -487,6 +487,14 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }, { public: true });
 
   // ───────── helpers ─────────
+  // Une carte ne reçoit ses identifiants qu'en HTTPS, sur un certificat épinglé.
+  function redfishPret(m) {
+    const conf = parc.redfishConf(m);
+    if (!conf) throw new ErreurHttp(409, 'Contrôle d\'alimentation non configuré.');
+    if (!/^https:/i.test(conf.base)) throw new ErreurHttp(409, REDFISH_HTTPS);
+    if (!conf.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé : confirme son empreinte.');
+    return conf;
+  }
   function agentDe(ctx) {
     controlerEchecs(ctx);
     const res = agents.resoudre(String(ctx.req.headers['x-agent-token'] || ''));
@@ -508,9 +516,10 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }
   function ciblePinTLS(m, params) {
     if (params.get('redfish') === '1') {
-      const conf = m.rf_url || (consolesEffectives(m).find(c => ['idrac', 'ilo', 'ipmi'].includes(c.type))?.target);
-      if (!conf) throw new ErreurHttp(409, 'Aucune carte Redfish configurée.');
-      const u = new URL(conf); return { host: u.hostname, port: Number(u.port) || 443, redfish: true };
+      const base = parc.redfishBase(m);
+      if (!base) throw new ErreurHttp(409, 'Aucune carte Redfish configurée.');
+      if (!/^https:/i.test(base)) throw new ErreurHttp(422, REDFISH_HTTPS);
+      const u = new URL(base); return { host: u.hostname, port: Number(u.port) || 443, redfish: true };
     }
     const idx = Math.max(0, Math.min(7, Number(params.get('idx')) || 0));
     const item = consolesEffectives(m)[idx];
