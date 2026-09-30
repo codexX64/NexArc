@@ -51,6 +51,13 @@ Jetons d'agents
   - un jeton par agent, gardé seulement sous forme d'empreinte ; le jeton en
     clair n'apparaît qu'une fois, à l'inscription de l'agent.
 
+Sauvegardes
+  - l'exploitant peut tirer une copie de la base entière, chiffrée pour une clé
+    dont la partie privée ne vit pas sur la machine de Sentinel.
+  Finalité : restaurer le service après une panne ou un incident. Durée : celle
+  que l'exploitant fixe (trente jours conseillés) ; un compte effacé disparaît
+  des sauvegardes à mesure qu'elles expirent.
+
 2. CE QUI PART AILLEURS
 
   - Les agents installés sur les postes envoient à Sentinel leur télémétrie et
@@ -58,6 +65,8 @@ Jetons d'agents
   - Les cartes de gestion (iDRAC, iLO, JetKVM, BMC…) et les serveurs VNC/MeshCentral
     reçoivent les commandes de console et d'alimentation, sur le réseau de
     l'exploitant, par des connexions dont Sentinel vérifie le certificat épinglé.
+    L'interface web d'une carte s'affiche sous une adresse à part, où aucun
+    cookie de Sentinel ne lui parvient.
   - SYNAPSE, s'il est installé, reçoit les faits du parc — machines enrôlées,
     perdues et revenues, alertes ouvertes et résolues, tâches, automatisations,
     réveils — jamais le contenu d'une commande, jamais un secret.
