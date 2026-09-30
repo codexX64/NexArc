@@ -249,6 +249,28 @@ test('révocation d\'un jeton d\'agent : aussitôt refusé, tâches dues abandon
   assert.equal(refMachineParHote('poste-revoque'), mref, 'réinscrit, l\'agent retrouve sa machine');
 });
 
+test('sauvegarde chiffrée pour une clé publique, restaurée ailleurs avec la clé privée seule', () => {
+  const paire = () => crypto.generateKeyPairSync('rsa', { modulusLength: 3072, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
+  const { publicKey, privateKey } = paire();
+  assert.notEqual(cli(['sauvegarde'], { entree: crypto.generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } }).publicKey }).status, 0, 'clé trop courte refusée');
+  const sauv = cli(['sauvegarde'], { entree: publicKey });
+  assert.equal(sauv.status, 0, String(sauv.stderr));
+  assert.ok(!sauv.stdout.includes(Buffer.from('poste-revoque')) && !sauv.stdout.includes(Buffer.from('SQLite format')), 'rien en clair');
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-restauration-'));
+  const prive = path.join(d, 'prive.pem'), autre = path.join(d, 'autre.pem'), cible = path.join(d, 'restauree.db');
+  fs.writeFileSync(prive, privateKey);
+  fs.writeFileSync(autre, paire().privateKey);
+  assert.notEqual(cli(['restaurer', autre, cible], { entree: sauv.stdout }).status, 0, 'une autre clé privée ne relit rien');
+  assert.equal(cli(['restaurer', prive, cible], { entree: sauv.stdout }).status, 0);
+  assert.notEqual(cli(['restaurer', prive, cible], { entree: sauv.stdout }).status, 0, 'jamais par-dessus un fichier');
+  assert.equal(fs.statSync(cible).mode & 0o777, 0o600);
+  const db = new DatabaseSync(cible, { readOnly: true });
+  try {
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM machines').get().n, s.parc.db.prepare('SELECT COUNT(*) n FROM machines').get().n, 'le parc entier');
+  } finally { db.close(); }
+  assert.equal(s.parc.db.prepare("SELECT COUNT(*) n FROM socle_journal WHERE action = 'sauvegarde.faite'").get().n, 1, 'sauvegarde journalisée');
+});
+
 test('codes et jetons de machine : chaque échec compte pour l\'adresse, bloquée après dix, à part des connexions humaines', async () => {
   const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-echecs-')));
   try {

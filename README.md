@@ -150,6 +150,29 @@ et Node), `node outils/exercice-rotation.mjs` (rotation de la clé maîtresse de
 bout en bout), `node outils/parcours-navigateur.mjs <url> <jeton> [dossier]`
 (parcours dans Chromium, sept largeurs, avec Playwright).
 
+## Sauvegardes
+
+Une sauvegarde est un instantané cohérent de la base, chiffré pour une clé
+publique RSA (3072 bits au moins) dont la clé privée ne vit **pas** sur la
+machine de Sentinel : qui prend la machine ne relit pas les sauvegardes.
+
+```bash
+# Une fois, sur le poste qui gardera la clé privée :
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out sentinel-sauvegarde.pem
+openssl pkey -in sentinel-sauvegarde.pem -pubout -out sentinel-sauvegarde.pub
+# Chaque jour, sur l'hôte de Sentinel (la clé publique suffit) :
+docker exec -i <sentinel> node src/cli.js sauvegarde < sentinel-sauvegarde.pub > sentinel-$(date -u +%F).sauv
+# Restauration, sur le poste de la clé privée, dans un fichier neuf :
+node src/cli.js restaurer sentinel-sauvegarde.pem sentinel.db < sentinel-AAAA-MM-JJ.sauv
+```
+
+Copier chaque sauvegarde hors de l'hôte et la garder trente jours. La base
+restaurée garde ses secrets scellés sous `SOCLE_CLE` : sans une copie hors
+ligne de cette clé, elle ne rouvre ni les secrets TOTP ni les secrets
+d'appareils. Chaque sauvegarde est inscrite au journal de sécurité. Remettre la
+base dans le volume, Sentinel arrêté : `sentinel.db` au propriétaire 10001, en
+`0600`, sans les fichiers `-wal` et `-shm` d'avant.
+
 ## Mise à jour depuis la version 1.1.0
 
 Sentinel 2.0 reprend une base `sentinel.db` de la 1.1.0 au premier démarrage,
