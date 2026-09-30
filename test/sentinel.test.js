@@ -27,11 +27,23 @@ const JETON_SYNAPSE = 'cer_sentinel_jeton-de-cerveau-des-essais';
 const SILENCE = { info() {}, warn() {}, error() {} };
 let s, syn, admin, membre, autre, lecteur, base, env;
 
+// L'adresse de l'origine des consoles est connue avant le démarrage : son port
+// est réservé ici, puis rendu pour qu'elle l'occupe.
+async function portLibre() {
+  const srv = net.createServer();
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const { port } = srv.address();
+  await new Promise(r => srv.close(r));
+  return port;
+}
+
 async function lancer(dossier, extra = {}) {
+  const consoles = await portLibre();
   env = {
     PORT: '0', HOTE: '127.0.0.1', DATA_DIR: dossier, SENTINEL_HUB_TOKEN: JETON_HUB, SENTINEL_ALLOW_EXEC: '1',
     SOCLE_CLE: crypto.randomBytes(32).toString('base64'), SOCLE_JETON_INSTALLATION: INSTALL,
-    SYNAPSE_URL: syn.url, SYNAPSE_JETON: JETON_SYNAPSE, ...extra,
+    SYNAPSE_URL: syn.url, SYNAPSE_JETON: JETON_SYNAPSE,
+    SENTINEL_CONSOLE_PORT: String(consoles), SENTINEL_CONSOLE_URL: `http://localhost:${consoles}`, ...extra,
   };
   const x = await demarrer(env, { log: SILENCE });
   return { ...x, port: x.serveur.address().port, client: () => new Client(x.serveur.address().port) };
@@ -174,9 +186,8 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
   const admin = s.api.routeur.routes.filter(r => r.options?.role === 'admin').map(r => `${r.methode} ${cheminDe(r)}`).sort();
   assert.deepEqual(admin, ['DELETE /api/automations/AAAAAAAAAAAAAAAA', 'DELETE /api/machines/AAAAAAAAAAAAAAAA', 'GET /api/machines/AAAAAAAAAAAAAAAA/pin', 'POST /api/hosts', 'POST /api/machines/AAAAAAAAAAAAAAAA/pin',
     'PUT /api/machines/AAAAAAAAAAAAAAAA/consoles', 'PUT /api/machines/AAAAAAAAAAAAAAAA/mesh-node', 'PUT /api/machines/AAAAAAAAAAAAAAAA/redfish']);
-  // Le mandataire des consoles, hors routeur : session exigée.
-  assert.equal((await anonyme.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 401);
-  assert.equal((await lecteur.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 403);
+  // Aucune console n'est plus servie sous l'origine de Sentinel.
+  assert.equal((await membre.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 404);
 });
 
 test('agent : code d\'inscription à usage unique, remontée, relève et résultat de SES tâches seulement', async () => {
@@ -324,29 +335,76 @@ test('consoles : mot de passe VNC scellé (admin+renfort), jamais rendu ; la cib
   assert.ok(!trace.details.includes('motdepasse-vnc'), 'jamais le secret au journal');
 });
 
-test('mandataire des consoles : les cookies de Sentinel ne partent jamais vers la carte, la carte ne peut pas en poser', async () => {
+test('origine des consoles : la carte s\'affiche hors de l\'origine de Sentinel, par une passe liée à la session', async () => {
   const recus = [];
   const carte = await fauxCarte((req, res) => {
-    recus.push(req.headers.cookie || '');
+    recus.push({ url: req.url, cookie: req.headers.cookie || '' });
     res.setHeader('Set-Cookie', ['session-carte=posee; Path=/', 'sentinel-sid=volee; Path=/', '__Host-autre=x; Path=/; Secure']);
+    res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Content-Type', 'text/html');
-    res.end('<html><head></head><body>carte</body></html>');
+    res.end('<html><head></head><body><img src="/logo.png">carte</body></html>');
   });
+  const { client: victor } = await membreInvite(admin, () => s.client(), { identifiant: 'victor' });
   try {
     await enroler(membre, { hostname: 'srv-mandataire' });
     const mref = refMachineParHote('srv-mandataire');
     assert.equal((await admin.put(`/api/machines/${mref}/consoles`, { consoles: [{ type: 'idrac', target: `https://127.0.0.1:${carte.port}`, label: 'iDRAC', embed: true }] })).status, 200);
+    assert.equal((await victor.post(`/api/machines/${mref}/remote`, { idx: 0 })).status, 409, 'pas de passe tant que le certificat n\'est pas épinglé');
     const vu = await admin.get(`/api/machines/${mref}/pin?idx=0`);
     assert.equal((await admin.post(`/api/machines/${mref}/pin`, { idx: 0, fp: vu.json.fp })).status, 200);
-    membre.cookies.set('session-carte', 'ouverte');
-    try {
-      const r = await membre.get(`/api/machines/${mref}/remote?idx=0`);
-      const page = await membre.get(r.json.url);
-      assert.equal(page.status, 200, page.texte.slice(0, 200));
-      assert.equal(recus.at(-1), 'session-carte=ouverte', 'seul le cookie de la carte lui parvient');
-      assert.ok(recus.every(c => !/sentinel-/.test(c)), 'jamais la session de Sentinel');
-      assert.deepEqual(page.setCookie.map(c => c.split('=')[0]), ['session-carte'], 'la carte ne pose aucun cookie au nom du service');
-    } finally { membre.cookies.delete('session-carte'); }
+    assert.equal((await lecteur.post(`/api/machines/${mref}/remote`, { idx: 0 })).status, 403, 'lecture seule : aucune passe');
+    assert.equal((await victor.post(`/api/machines/${mref}/remote`, { idx: 0 }, { origine: 'https://ailleurs.exemple.org' })).status, 403, 'une page d\'un autre site ne tire pas de passe');
+
+    const r = await victor.post(`/api/machines/${mref}/remote`, { idx: 0 });
+    assert.equal(r.status, 200);
+    const u = new URL(r.json.url);
+    assert.equal(u.origin, s.consoles.origine, 'la console est servie par l\'origine des consoles');
+    assert.notEqual(u.origin, victor.origine);
+    assert.match(u.pathname, /^\/c\/[A-Za-z0-9_-]{43}\/$/);
+    const trace = s.parc.db.prepare("SELECT acteur, objet, details FROM socle_journal WHERE action = 'console.ouverte' ORDER BY n DESC LIMIT 1").get();
+    assert.equal(trace.objet, 'srv-mandataire', 'ouverture journalisée');
+    assert.ok(!trace.details.includes(u.pathname.slice(3, -1)), 'jamais la passe au journal');
+
+    const vitrine = new Client(Number(u.port));
+    vitrine.cookies.set('session-carte', 'ouverte');
+    // Un navigateur n'enverrait pas les cookies de Sentinel à une autre origine ;
+    // s'il le faisait, ils ne partiraient pas vers la carte.
+    vitrine.cookies.set('sentinel-sid', victor.cookies.get('sentinel-sid'));
+    const page = await vitrine.get(u.pathname);
+    assert.equal(page.status, 200, page.texte.slice(0, 200));
+    assert.equal(recus.at(-1).cookie, 'session-carte=ouverte', 'seul le cookie de la carte lui parvient');
+    assert.deepEqual(page.setCookie.map(c => c.split('=')[0]), ['session-carte'], 'la carte ne pose aucun cookie au nom du service');
+    assert.equal(page.entetes['content-security-policy'], `frame-ancestors ${victor.origine}`, 'seule la page de Sentinel qui a tiré la passe l\'encadre');
+    assert.equal(page.entetes['x-frame-options'], undefined);
+    assert.equal(page.entetes['x-content-type-options'], 'nosniff');
+    assert.equal(page.entetes['cache-control'], 'no-store');
+    assert.ok(page.texte.includes(`<base href="${u.pathname}"><script src="/reancrage.js" data-prefixe="${u.pathname}"></script>`), 'réancrage par un script servi, jamais en ligne');
+    assert.ok(page.texte.includes(`<img src="${u.pathname}logo.png">`), 'liens absolus sous le préfixe');
+    const script = await vitrine.get('/reancrage.js');
+    assert.equal(script.status, 200);
+    assert.match(script.entetes['content-type'], /^text\/javascript/);
+    // Rien de Sentinel ne vit sur cette origine, et une passe inventée n'ouvre rien.
+    for (const chemin of ['/', '/index.html', '/app.js', '/api/compte/etat', `/api/machines/${mref}`, `/c/${'A'.repeat(43)}/`]) {
+      assert.equal((await vitrine.get(chemin)).status, 404, chemin);
+    }
+    assert.equal((await vitrine.post(`${u.pathname}connexion`, {}, { origine: victor.origine })).status, 403, 'une écriture ne vient que d\'une page de la console');
+    assert.equal((await s.client().get(`/c/${u.pathname.slice(3)}`)).status, 404, 'la passe ne vaut rien sur l\'origine de Sentinel');
+
+    // WebSocket de la carte, par la même passe et la même origine.
+    assert.match(await brancherWs(Number(u.port), `${u.pathname}ws`, { Origin: victor.origine }), / 403 /, 'origine étrangère refusée');
+    assert.match(await brancherWs(Number(u.port), `/c/${'A'.repeat(43)}/ws`, { Origin: u.origin }), / 404 /);
+    const ws = await connecter(`ws://localhost:${u.port}${u.pathname}ws?canal=1`, { entetes: { Origin: u.origin } });
+    const echos = [];
+    ws.on('texte', t => echos.push(t));
+    ws.envoyerTexte('bonjour');
+    await attendre(() => echos.length === 1, 3000);
+    assert.deepEqual(echos, ['carte:bonjour']);
+    assert.equal(carte.upgrades.at(-1).url, '/ws?canal=1');
+    ws.close();
+
+    // La passe meurt avec la session qui l'a tirée.
+    assert.equal((await victor.post('/api/compte/deconnexion')).status, 200);
+    assert.equal((await vitrine.get(u.pathname)).status, 404, 'passe morte après la déconnexion');
   } finally { await carte.fermer(); }
 });
 
@@ -525,7 +583,7 @@ test('une configuration invalide arrête le démarrage', async () => {
   const vide = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 's-')), 'socle_cle');
   fs.writeFileSync(vide, '\n');
   assert.match(await erreurDe({ SOCLE_CLE: '', SOCLE_CLE_FILE: vide }), /SOCLE_CLE_FILE/, 'secret vide : la clé n\'est jamais tirée dans le volume');
-  for (const [variable, valeur] of [['SENTINEL_MESH_LOGIN_KEY', 'abcd'], ['SENTINEL_MESH_LOGIN_KEY', '0'.repeat(63)], ['SYNAPSE_JETON', 'court'], ['SYNAPSE_JETON', 'changeme-changeme-changeme']]) {
+  for (const [variable, valeur] of [['SENTINEL_MESH_LOGIN_KEY', 'abcd'], ['SENTINEL_MESH_LOGIN_KEY', '0'.repeat(63)], ['SYNAPSE_JETON', 'court'], ['SYNAPSE_JETON', 'changeme-changeme-changeme'], ['SENTINEL_CONSOLE_URL', 'http://consoles.exemple.org/chemin']]) {
     assert.match(await erreurDe({ [variable]: valeur }), new RegExp(variable), `${variable}=${valeur}`);
   }
 });

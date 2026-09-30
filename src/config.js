@@ -12,7 +12,7 @@ export function lireConfigSentinel(env = process.env) {
   if (env.SOCLE_CLE_FILE && fs.existsSync(env.SOCLE_CLE_FILE) && !fs.readFileSync(env.SOCLE_CLE_FILE, 'utf8').trim()) {
     throw Object.assign(new Error(`Configuration invalide :\n  - SOCLE_CLE_FILE (${env.SOCLE_CLE_FILE}) est vide : pose la clé maîtresse dans ce secret (README, « Installation seule »).`), { erreurs: ['SOCLE_CLE_FILE vide'] });
   }
-  return lireConfig({
+  const cfg = lireConfig({
     port: { env: 'PORT', type: 'entier', min: 0, max: 65535, defaut: 8090 },
     hote: { env: 'HOTE', type: 'chaine', defaut: '0.0.0.0' },
     donnees: { env: 'DATA_DIR', type: 'chaine', defaut: '/app/data' },
@@ -58,5 +58,17 @@ export function lireConfigSentinel(env = process.env) {
     // Intégration SYNAPSE : la mémoire du parc. Sans URL ni jeton, rien ne part.
     synapseUrl: { env: 'SYNAPSE_URL', type: 'url' },
     synapseJeton: { env: 'SYNAPSE_JETON', type: 'secret', min: 24 },
+    // Origine des consoles web (origine-consoles.js) : l'adresse que les
+    // navigateurs joignent, et le port où elle écoute. Sans adresse, l'interface
+    // d'une carte s'ouvre dans un nouvel onglet, directement sur la carte.
+    consoleUrl: { env: 'SENTINEL_CONSOLE_URL', type: 'url' },
+    consolePort: { env: 'SENTINEL_CONSOLE_PORT', type: 'entier', min: 0, max: 65535, defaut: 8091 },
   }, env);
+  if (cfg.consoleUrl) {
+    const u = new URL(cfg.consoleUrl);
+    if (u.pathname !== '/' || u.search || u.hash || u.username || u.password) {
+      throw Object.assign(new Error('Configuration invalide :\n  - SENTINEL_CONSOLE_URL : une origine seule est attendue (schéma, hôte et port, sans chemin).'), { erreurs: ['SENTINEL_CONSOLE_URL'] });
+    }
+  }
+  return cfg;
 }

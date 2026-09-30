@@ -22,7 +22,7 @@
     "healthcheck": { "type": "http", "path": "/api/health", "expect": 200, "timeout": "5s" },
     "arch": ["amd64", "arm64"],
     "resources": { "ramMb": 256, "cpu": 0.5, "diskMb": 1024 },
-    "ports": [{ "name": "http", "container": 8090, "protocol": "http", "expose": "proxy" }],
+    "ports": [{ "name": "http", "container": 8090, "protocol": "http", "expose": "proxy" }, { "name": "consoles", "container": 8091, "protocol": "http", "expose": "proxy" }],
     "volumes": [{ "name": "data", "path": "/data" }]
   },
   "config": [
@@ -37,6 +37,7 @@
     { "key": "SENTINEL_MESH_URL", "label": "Serveur MeshCentral", "type": "string", "default": "", "advanced": true, "help": "Vide : la prise en main MeshCentral est désactivée." },
     { "key": "SENTINEL_MESH_USER", "label": "Compte de service Mesh", "type": "string", "default": "", "advanced": true, "help": "Sans le préfixe « user// ». Pour l'auto-login un clic (compte SANS second facteur)." },
     { "key": "SENTINEL_MESH_LOGIN_KEY", "label": "Clé de connexion Mesh", "type": "secret", "advanced": true, "help": "Clé hex de « meshcentral --logintokenkey ». Sans elle, l'opérateur ouvre le bureau avec sa propre session Mesh." },
+    { "key": "SENTINEL_CONSOLE_URL", "label": "Adresse des consoles web", "type": "string", "default": "", "advanced": true, "help": "Origine qui sert l'interface des cartes de gestion dans Sentinel (second port, « consoles »), sous son propre nom d'hôte, par ex. https://consoles.exemple.org. Vide : l'interface d'une carte s'ouvre dans un nouvel onglet." },
     { "key": "SENTINEL_MESH_EMBED", "label": "Bureau Mesh en iframe", "type": "select", "default": "0", "advanced": true, "options": [{ "value": "0", "label": "Nouvel onglet (fiable)" }, { "value": "1", "label": "Intégré (best-effort)" }] },
     { "key": "SENTINEL_PUBLIC_URL", "label": "Adresse publique de Sentinel", "type": "string", "default": "", "advanced": true, "help": "Adresse que les agents utiliseront pour joindre Sentinel (vide = celle de la requête d'enrôlement)." },
     { "key": "SOCLE_HTTP", "label": "Accès sans HTTPS", "type": "select", "default": "0", "required": true, "options": [{ "value": "0", "label": "Non — Sentinel est servi en HTTPS (Relay ou certificat du Hub)" }, { "value": "1", "label": "Oui — réseau de confiance, mode dégradé" }], "help": "Les clés d'accès n'existent qu'en HTTPS. En mode dégradé, l'administrateur se connecte avec mot de passe et application d'authentification, et Sentinel l'affiche partout." },

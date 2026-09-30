@@ -27,7 +27,7 @@ Projet [CodexX64](https://github.com/CodexX64). Licence MIT.
 - **Consoles intégrées** : console VNC plein écran (le mot de passe VNC ne quitte
   jamais le serveur), interfaces d'administration hors bande (iDRAC, iLO, IPMI,
   JetKVM, hyperviseurs…) servies par un proxy inverse qui filtre en-têtes et
-  cookies, bureau distant MeshCentral.
+  cookies, sous une origine à part, bureau distant MeshCentral.
 - **Alimentation Redfish** : lecture de l'état, allumage (membre), arrêt,
   extinction forcée, redémarrage et cycle (administrateur, confirmation
   récente), sur une carte de gestion au certificat épinglé.
@@ -222,6 +222,19 @@ plein dans Sentinel, mot de passe scellé côté serveur), iDRAC, iLO, IPMI/BMC,
 JetKVM, hyperviseur (console noVNC des VM), interface web, MeshCentral. Une URL
 amont est jointe par un proxy inverse qui n'accepte que http(s), refuse les
 métadonnées de nuage et les plages réservées, et filtre en-têtes et cookies.
+
+L'interface web d'une carte est du code qui n'est pas le nôtre : elle ne
+s'exécute jamais sous l'origine de Sentinel, où elle lirait l'API avec la
+session de l'opérateur. Pour l'afficher dans Sentinel, poser
+`SENTINEL_CONSOLE_URL` : un second écouteur (`SENTINEL_CONSOLE_PORT`, 8091 par
+défaut) sert alors les consoles sous cette adresse, où ne vivent ni page, ni
+API, ni session de Sentinel. Chaque ouverture tire une passe de 256 bits, liée
+à la session qui l'a demandée, à la machine et à l'accès, qui meurt avec cette
+session (huit heures au plus) ; seule la page de Sentinel qui l'a tirée peut
+encadrer la console. Donner à cette adresse **son propre nom d'hôte**, en HTTPS
+de préférence : un autre port du même hôte sépare les scripts, pas les cookies,
+que les navigateurs ne distinguent pas par port. Sans `SENTINEL_CONSOLE_URL`,
+l'interface d'une carte s'ouvre dans un nouvel onglet, directement sur la carte.
 L'alimentation passe par Redfish sur les cartes qui le supportent (identifiants
 posés par un administrateur dans « Accès distants », certificat épinglé si la
 carte parle HTTPS). Allumer est ouvert au rôle membre, comme le réveil par le
@@ -289,6 +302,8 @@ socle.
 | `SENTINEL_MESH_LOGIN_KEY` | clé hex de `meshcentral --logintokenkey` | — |
 | `SENTINEL_MESH_VIEWMODE` / `_HIDE` / `_EMBED` | affichage du bureau Mesh | `11` / — / `0` |
 | `SYNAPSE_URL` / `SYNAPSE_JETON` | mémoire du parc ; jamais le contenu d'une commande | — |
+| `SENTINEL_CONSOLE_URL` | origine des consoles web intégrées (schéma, hôte, port), sur son propre nom d'hôte ; vide : une carte s'ouvre dans un nouvel onglet | — |
+| `SENTINEL_CONSOLE_PORT` | écoute de cette origine | `8091` |
 | `DATA_DIR` | dossier de `sentinel.db` | `/app/data` |
 | `PORT` / `HOTE` | écoute | `8090` / `0.0.0.0` |
 | `SOCLE_CLE` | clé maîtresse, 32 octets en base64 (en conteneur : `SOCLE_CLE_FILE`, secret Docker) ; sans l'une ni l'autre : créée dans `DATA_DIR/cles` (développement) | — |
@@ -315,8 +330,10 @@ du relais. Le relais doit transmettre :
 X-Forwarded-For, X-Forwarded-Proto, Host
 ```
 
-Les consoles intégrées ouvrent des WebSockets (`/vnc/…`, `/console/…`) : le
-relais doit laisser passer la mise à niveau `Upgrade`.
+Les consoles intégrées ouvrent des WebSockets (`/vnc/…` sur Sentinel, `/c/…`
+sur l'origine des consoles) : le relais doit laisser passer la mise à niveau
+`Upgrade`. L'origine des consoles est une seconde route du relais, vers le port
+`SENTINEL_CONSOLE_PORT`, sous son propre nom d'hôte.
 
 ## Sécurité
 

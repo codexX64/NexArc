@@ -505,7 +505,7 @@ async function ouvrirConsole(m, idx) {
   const con = (m.consoles || [])[idx];
   if (con && con.type === 'vnc') return ouvrirVnc(m, idx, con.label);
   try {
-    const r = await api.get(`/api/machines/${m.id}/remote?idx=${idx}`);
+    const r = await api.post(`/api/machines/${m.id}/remote`, { idx });
     if (r.embed) ouvrirCadre(r.url, `${r.label} · ${m.host}`);
     else window.open(r.url, '_blank', 'noopener');
   } catch (e) {

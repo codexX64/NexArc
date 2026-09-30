@@ -16,6 +16,8 @@ services:
     secrets: [socle_cle, socle_cle_ancienne]
     ports:
       - "${SENTINEL_PORT:-8090}:8090"
+      # Origine des consoles web (SENTINEL_CONSOLE_URL) : rien n'y écoute sans elle.
+      - "${SENTINEL_CONSOLE_PORT:-8091}:${SENTINEL_CONSOLE_PORT:-8091}"
     volumes:
       - sentinel-data:/data
     read_only: true

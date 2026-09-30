@@ -1,11 +1,12 @@
-// Mandataire inverse des consoles intégrées (iDRAC, iLO, JetKVM, IPMI…).
+// Mandataire inverse des consoles web (iDRAC, iLO, JetKVM, IPMI…), servi par
+// l'origine des consoles (origine-consoles.js), jamais par celle de Sentinel.
 //
 // Ces cartes envoient X-Frame-Options / CSP frame-ancestors : un navigateur
-// refuse de les afficher dans Sentinel. Pour les intégrer, on les sert depuis
-// l'origine de Sentinel : chaque requête va sous /console/{ref}/{idx}/… , est
-// transmise à la cible RÉSOLUE CÔTÉ SERVEUR (jamais fournie par le client), et
-// les en-têtes de cadrage tombent au retour. Le certificat auto-signé de la
-// carte est épinglé et vérifié (jamais rejectUnauthorized:false).
+// refuse de les afficher dans Sentinel. Chaque requête arrive sous
+// /c/{passe}/… , est transmise à la cible RÉSOLUE CÔTÉ SERVEUR (jamais fournie
+// par le client), et la politique de cadrage de la carte est remplacée par la
+// seule page de Sentinel qui a demandé la passe. Le certificat auto-signé de la
+// carte est épinglé et vérifié.
 import http from 'node:http';
 import https from 'node:https';
 import { agentEpingle } from './tls.js';
@@ -15,16 +16,18 @@ const STRIP_RESPONSE = new Set([
   'x-frame-options', 'content-security-policy', 'content-security-policy-report-only',
   'content-encoding', 'content-length', 'transfer-encoding', 'connection', 'keep-alive',
   'public-key-pins', 'strict-transport-security', 'set-cookie', 'location',
+  'cache-control', 'x-content-type-options', 'referrer-policy',
 ]);
 const STRIP_REQUEST = new Set([
   'host', 'connection', 'keep-alive', 'proxy-authenticate', 'cookie2', 'proxy-authorization',
   'te', 'trailers', 'transfer-encoding', 'upgrade', 'accept-encoding',
 ]);
 
-// Les cookies de Sentinel (session, cérémonie) accompagnent chaque requête du
-// navigateur vers /console/ : ils ne partent jamais vers la carte, et la carte
-// ne peut pas en poser un du même nom. Les préfixes __Host- et __Secure- sont
-// réservés au service.
+// Un navigateur ne distingue pas les cookies par port : servie sur le même hôte
+// que Sentinel, l'origine des consoles reçoit les cookies de Sentinel (session,
+// cérémonie). Ils ne partent jamais vers la carte, et la carte ne peut pas en
+// poser un du même nom. Les préfixes __Host- et __Secure- sont réservés au
+// service.
 export const COOKIES_DU_SERVICE = /^(?:__Host-|__Secure-)?sentinel-|^__(?:Host|Secure)-/i;
 
 export function cookiesPourLaCarte(entete) {
@@ -35,14 +38,14 @@ export function cookiesPourLaCarte(entete) {
 const RE_HEAD = /<head[^>]*>/i;
 const RE_ABS = /\b(src|href|action|data-src)\s*=\s*(["'])\/(?!\/)/gi;
 
-// Réancre fetch/XHR/WebSocket construits à l'exécution, sans toucher au code de
-// la carte.
-const SHIM = p => `<script>(function(){var P=${JSON.stringify(p)};function fix(u){try{if(typeof u!=="string")return u;if(u.indexOf(P)===0)return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/")return P.replace(/\\/$/,"")+u;if(/^(wss?|https?):\\/\\//i.test(u)){var a=document.createElement("a");a.href=u;if(a.host!==location.host)return P.replace(/\\/$/,"")+a.pathname+a.search;}return u;}catch(e){return u;}}var of=window.fetch;if(of)window.fetch=function(i,o){if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);return of.call(this,i,o);};var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){arguments[1]=fix(u);return ox.apply(this,arguments);};var OW=window.WebSocket;if(OW){var NW=function(u,pr){u=fix(u);if(/^\\//.test(u))u=(location.protocol==="https:"?"wss://":"ws://")+location.host+u;return pr?new OW(u,pr):new OW(u);};NW.prototype=OW.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){NW[k]=OW[k];});window.WebSocket=NW;}})();</script>`;
-
+// Les liens absolus du balisage passent sous le préfixe ; ceux que la page
+// construit à l'exécution, par le script de réancrage (web/reancrage.js), que
+// l'origine des consoles sert elle-même. Le préfixe n'est fait que de
+// caractères base64url : il entre tel quel dans l'attribut.
 export function reecrireHtml(body, prefix) {
   const p = prefix.replace(/\/$/, '');
   let s = body.toString('utf8').replace(RE_ABS, (_m, a, q) => `${a}=${q}${p}/`);
-  const tete = `<base href="${prefix}">` + SHIM(prefix);
+  const tete = `<base href="${prefix}"><script src="/reancrage.js" data-prefixe="${prefix}"></script>`;
   const m = RE_HEAD.exec(s);
   return Buffer.from(m ? s.slice(0, m.index + m[0].length) + tete + s.slice(m.index + m[0].length) : tete + s, 'utf8');
 }
@@ -74,9 +77,10 @@ export function cibleAmont(base, chemin, query) {
 }
 
 // Transmet une requête HTTP vers la console. `pin` (certificat épinglé) est
-// requis pour une cible https.
-export function mandaterHttp(req, res, { base, prefix, pin, corps }) {
-  const cible = new URL(cibleAmont(base, req.params.reste || '', new URL(req.url, 'http://x').search.slice(1)));
+// requis pour une cible https ; `parent`, l'origine de la page de Sentinel
+// qui encadre la console.
+export function mandaterHttp(req, res, { base, reste, prefix, pin, corps, parent }) {
+  const cible = new URL(cibleAmont(base, reste || '', new URL(req.url, 'http://x').search.slice(1)));
   const secure = cible.protocol === 'https:';
   const entetes = {};
   for (const [k, v] of Object.entries(req.headers)) if (!STRIP_REQUEST.has(k.toLowerCase())) entetes[k] = v;
@@ -104,9 +108,10 @@ export function mandaterHttp(req, res, { base, prefix, pin, corps }) {
       }
       sortie[k] = v;
     }
-    sortie['X-Frame-Options'] = 'SAMEORIGIN';
-    sortie['Content-Security-Policy'] = "frame-ancestors 'self'";
+    sortie['Content-Security-Policy'] = `frame-ancestors ${parent}`;
     sortie['Referrer-Policy'] = 'no-referrer';
+    sortie['X-Content-Type-Options'] = 'nosniff';
+    sortie['Cache-Control'] = 'no-store';
     const ctype = String(ru.headers['content-type'] || '');
     if (/text\/html/i.test(ctype)) {
       const morceaux = []; let taille = 0;

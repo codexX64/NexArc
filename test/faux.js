@@ -1,7 +1,8 @@
 // Faux serveurs pour les essais : SYNAPSE, un serveur RFB (VNC), une carte de
-// gestion HTTPS auto-signée, une carte Redfish, un serveur TLS qui compte ce
-// qu'il reçoit, un WebSocket simulé pour le pont, et une capture UDP pour le
-// paquet magique. De vrais serveurs, avec les vrais protocoles.
+// gestion HTTPS auto-signée (pages et WebSocket), une carte Redfish, un serveur
+// TLS qui compte ce qu'il reçoit, un WebSocket simulé pour le pont, et une
+// capture UDP pour le paquet magique. De vrais serveurs, avec les vrais
+// protocoles.
 import net from 'node:net';
 import tls from 'node:tls';
 import http from 'node:http';
@@ -9,6 +10,7 @@ import https from 'node:https';
 import dgram from 'node:dgram';
 import { certificatEssai } from '../socle/essai/smtp.js';
 import { reponseVnc } from '../src/vncbridge.js';
+import { accepter } from '../src/websocket.js';
 
 export async function fauxSynapse(jeton = 'cer_sentinel_essai') {
   const evenements = [];
@@ -60,11 +62,21 @@ export async function fauxRfb({ motDePasse = '' } = {}) {
 }
 
 // Carte de gestion HTTPS auto-signée : sert `reponse` (HTML ou JSON) selon le chemin.
+// Sa console web renvoie en écho, préfixé de « carte: », ce qu'on lui écrit
+// en WebSocket, et note le chemin et l'Origin de chaque mise à niveau.
 export async function fauxCarte(reponse = (req, res) => res.end('<html><head></head><body>carte</body></html>')) {
   const c = certificatEssai('carte-a');
   const s = https.createServer({ key: c.cle, cert: c.cert }, reponse);
+  const upgrades = [], sockets = new Set();
+  s.on('upgrade', (req, socket) => {
+    sockets.add(socket);
+    upgrades.push({ url: req.url, origin: req.headers.origin, cookie: req.headers.cookie });
+    const ws = accepter(req, socket, {});
+    ws.on('texte', t => ws.envoyerTexte('carte:' + t));
+  });
   await new Promise(r => s.listen(0, '127.0.0.1', r));
-  return { host: '127.0.0.1', port: s.address().port, cert: c.cert, fermer: () => new Promise(f => { s.close(f); s.closeAllConnections(); }) };
+  // Une socket mise à niveau n'appartient plus au serveur : fermée à la main.
+  return { host: '127.0.0.1', port: s.address().port, cert: c.cert, upgrades, fermer: () => new Promise(f => { s.close(f); s.closeAllConnections(); for (const x of sockets) x.destroy(); }) };
 }
 
 // WebSocket simulé côté navigateur, pour piloter pont() sans vraie socket.

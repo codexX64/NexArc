@@ -45,13 +45,14 @@ const S = {
     toutes_h: { type: 'entier', min: 1, max: 720, defaut: 24 }, heure: { type: 'entier', min: 0, max: 23, defaut: 2 },
   },
   pin: { idx: { type: 'entier', min: 0, max: 7 }, redfish: { type: 'booleen', defaut: false }, fp: { type: 'chaine', requis: true, max: 100 } },
+  acces: { idx: { type: 'entier', min: 0, max: 7, defaut: 0 } },
 };
 
 // Chaque route non publique déclare dans ses options le rôle minimal qu'elle
 // exige (lecture, membre, admin). La déclaration ne remplace pas le contrôle,
 // fait dans le gestionnaire : l'essai « autorisation » balaie toutes les routes
 // et vérifie que l'un et l'autre concordent.
-export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine }) {
+export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine, consoles }) {
   const r = new Routeur();
   const { portail, journal } = socle;
   const debitReveil = new Debit({ max: 30 }), debitPower = new Debit({ max: 20 }), debitIngest = new Debit({ max: cfg.ingestMinute });
@@ -127,10 +128,12 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   // ───────── consoles ─────────
   r.get('/api/console-types', ctx => { session(ctx); return { types: typesPublics(meshActif()) }; }, { role: 'lecture' });
 
-  r.get('/api/machines/:ref/remote', ctx => {
+  // Ouvrir un accès : une passe pour l'origine des consoles, ou un jeton de
+  // connexion Mesh. Chacun est un droit tiré pour l'occasion : POST.
+  r.post('/api/machines/:ref/remote', async ctx => {
     session(ctx, { role: 'membre' });
+    const { idx } = await corps(ctx, S.acces);
     const m = parc.machine(machine(ctx.params.ref));
-    const idx = Math.max(0, Math.min(7, Number(ctx.url.searchParams.get('idx')) || 0));
     const items = consolesEffectives(m);
     if (!items.length) throw new ErreurHttp(409, 'Aucun accès distant configuré pour cette machine.');
     if (idx >= items.length) throw new ErreurHttp(404, 'Accès introuvable.');
@@ -141,7 +144,11 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       const url = urlBureau(item.target, { meshUrl: cfg.meshUrl, user: cfg.meshUser, cle: cfg.meshCle, viewmode: cfg.meshViewmode, hide: cfg.meshHide });
       return { url, embed: cfg.meshEmbed, label: item.label, type: 'mesh' };
     }
-    if (item.embed) return { url: `/console/${m.ref}/${idx}/`, embed: true, label: item.label, type: item.type };
+    if (item.embed && consoles) {
+      // Pas de passe pour une carte que le mandataire refuserait de joindre.
+      if (/^https/i.test(item.target) && !item.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé : confirme son empreinte.');
+      return { url: consoles.ouvrir(ctx, m, idx, item.type), embed: true, label: item.label, type: item.type };
+    }
     return { url: item.target, embed: false, label: item.label, type: item.type };
   }, { role: 'membre' });
 

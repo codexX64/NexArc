@@ -9,6 +9,7 @@ services:
     networks: [hub]
     ports:
       - "{{hostport.http}}:8090"
+      - "{{hostport.consoles}}:8091"
     volumes:
       - {{volume.data}}:/data
     read_only: true
@@ -46,6 +47,9 @@ services:
       SENTINEL_MESH_USER: "{{config.SENTINEL_MESH_USER}}"
       SENTINEL_MESH_LOGIN_KEY: "{{config.SENTINEL_MESH_LOGIN_KEY}}"
       SENTINEL_MESH_EMBED: "{{config.SENTINEL_MESH_EMBED}}"
+      # Origine à part des consoles web : l'adresse par laquelle les navigateurs
+      # joignent le second port. Vide : une carte s'ouvre dans un nouvel onglet.
+      SENTINEL_CONSOLE_URL: "{{config.SENTINEL_CONSOLE_URL}}"
       # Comptes : clé maîtresse gardée par le Hub, accès HTTPS ou mode dégradé,
       # relais de confiance.
       SOCLE_CLE: "{{config.SOCLE_CLE}}"

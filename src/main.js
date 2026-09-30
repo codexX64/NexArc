@@ -1,7 +1,7 @@
 // Démarrage de Sentinel : configuration validée, base, socle commun (comptes,
 // sessions, coffre), reprise de la 1.x, boucles de collecte et d'automatisation,
-// serveur HTTP, mandataire des consoles et mise à niveau WebSocket (pont VNC,
-// mandataire WebSocket) écrite à la main.
+// serveur HTTP et mise à niveau WebSocket (pont VNC) écrite à la main, et, si
+// son adresse est posée, l'origine à part des consoles web.
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -14,11 +14,11 @@ import { Synapse } from './synapse.js';
 import { migrerComptes, migrerParc } from './migration.js';
 import { creerApi } from './api.js';
 import { pont } from './vncbridge.js';
-import { mandaterHttp } from './proxy.js';
-import { verifierUpgrade, accepter, connecter, refuser } from './websocket.js';
+import { OrigineConsoles } from './origine-consoles.js';
+import { verifierUpgrade, accepter, refuser } from './websocket.js';
 import {
   Debit, ErreurHttp, demarrerSocle, entetesSecurite, envelopper, nonceCsp, politiqueContenu,
-  repondreErreur, repondreJson, servirFichier, lireCorps, origineDe,
+  repondreErreur, repondreJson, servirFichier, origineDe,
 } from '../socle/src/index.js';
 
 const RACINE = path.resolve(import.meta.dirname, '..');
@@ -68,7 +68,8 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
   });
   const agents = new Agents(db, { parc, maxMachines: cfg.maxMachines, synapse, alertes, flux: l => flux.pousser({ t: 'flux', ...l }) });
   const taches = new Taches(db, { parc, synapse, journal: socle.journal, flux, commandeLibre: cfg.commandeLibre });
-  const api = creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine: RACINE });
+  const consoles = cfg.consoleUrl ? new OrigineConsoles({ url: cfg.consoleUrl, parc, comptes: socle.comptes, proxys: socle.portail.proxys, journal: socle.journal, racine: RACINE }) : null;
+  const api = creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine: RACINE, consoles });
   // Données d'un compte : exportées à sa demande, neutralisées à sa suppression.
   socle.portail.exporteur = compteId => parc.donneesDe(compteId);
   socle.comptes.apresSuppression.push(compteId => parc.oublier(compteId));
@@ -88,17 +89,16 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
 
   // Toute requête compte : une page en demande une vingtaine, une rafale des milliers.
   const debit = new Debit({ max: 900 });
+  // Seules les consoles et, s'il s'ouvre intégré, le bureau Mesh s'affichent en cadre.
+  const cadres = [cfg.consoleUrl && new URL(cfg.consoleUrl).origin, cfg.meshEmbed && cfg.meshUrl && new URL(cfg.meshUrl).origin].filter(Boolean);
   const serveur = http.createServer(envelopper(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://sentinel');
       const ctx = socle.portail.contexte(req, res);
       if (!debit.prendre(ctx.ip)) { socle.journal.rare(`debit:${ctx.ip}`, { action: 'limite.atteinte', objet: 'requetes', ip: ctx.ip, resultat: 'refus' }); throw new ErreurHttp(429, 'Trop de requêtes.'); }
       ctx.url = url;
-      // Mandataire des consoles : la cible pose sa propre politique de cadrage,
-      // on ne lui applique pas la CSP stricte du service.
-      if (url.pathname.startsWith('/console/')) return await mandaterConsole(req, res, url, ctx);
       const nonce = nonceCsp();
-      entetesSecurite(res, { secure: ctx.securise, csp: politiqueContenu({ nonce, secure: ctx.securise, img: ['data:'], connect: ["'self'"], frame: ["'self'"] }) });
+      entetesSecurite(res, { secure: ctx.securise, csp: politiqueContenu({ nonce, secure: ctx.securise, img: ['data:'], connect: ["'self'"], frame: cadres }) });
       if (await socle.portail.traiter(req, res, url, ctx)) return;
       if (await api.traiter(ctx)) return;
       if (!['GET', 'HEAD'].includes(req.method)) return repondreJson(res, 405, { error: 'Méthode non admise.' });
@@ -109,7 +109,7 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
     } catch (e) { repondreErreur(res, e, { journal: log }); }
   }));
 
-  // ---- mise à niveau WebSocket : pont VNC et mandataire des consoles ----
+  // ---- mise à niveau WebSocket : pont VNC ----
   serveur.on('upgrade', async (req, socket) => {
     try {
       const url = new URL(req.url, 'http://sentinel');
@@ -119,10 +119,8 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
       const acces = autoriserWs(req);
       if (!acces) return refuser(socket, 401, 'Unauthorized');
 
-      let m = /^\/vnc\/([A-Za-z0-9_-]{16})\/(\d+)$/.exec(url.pathname);
-      if (m) return await upgradeVnc(req, socket, m[1], Number(m[2]));
-      m = /^\/console\/([A-Za-z0-9_-]{16})\/(\d+)\/(.*)$/.exec(url.pathname);
-      if (m) return await upgradeConsole(req, socket, url, m[1], Number(m[2]), m[3]);
+      const m = /^\/vnc\/([A-Za-z0-9_-]{16})\/(\d+)$/.exec(url.pathname);
+      if (m) return await upgradeVnc(req, socket, acces, m[1], Number(m[2]));
       refuser(socket, 404, 'Not Found');
     } catch { try { socket.destroy(); } catch { /* déjà fermé */ } }
   });
@@ -135,59 +133,20 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
     try { socle.portail.exiger(ctx, { role: 'membre' }); return ctx; } catch { return null; }
   }
 
-  async function upgradeVnc(req, socket, ref, idx) {
+  async function upgradeVnc(req, socket, ctx, ref, idx) {
     const id = parc.idDe(ref); if (!id) return refuser(socket, 404);
     const item = parc.entreeConsole(id, idx);
     if (!item || item.type !== 'vnc') return refuser(socket, 404);
     const cible = String(item.target); const i = cible.lastIndexOf(':');
     const host = cible.slice(0, i).trim(), port = Number(cible.slice(i + 1));
     if (!host || !Number.isInteger(port)) return refuser(socket, 404);
-    const motDePasse = parc.ouvrirVncPw(item, parc.machine(id).ref);
+    const m = parc.machine(id);
+    const motDePasse = parc.ouvrirVncPw(item, m.ref);
     const offert = String(req.headers['sec-websocket-protocol'] || '').split(',').map(x => x.trim());
     const ws = accepter(req, socket, { sousProtocole: offert.includes('binary') ? 'binary' : null });
+    // noVNC se reconnecte seul : une ligne par session et par console suffit.
+    socle.journal.rare(`console:${ctx.session.id}:${id}:${idx}`, { acteur: ctx.session.compte, action: 'console.ouverte', objet: m.host, ip: ctx.ip, details: { type: 'vnc', idx } }, 10 * 60e3);
     await pont(ws, host, port, { motDePasse }).catch(() => { try { ws.close(); } catch { /* fermé */ } });
-  }
-
-  async function upgradeConsole(req, socket, url, ref, idx, reste) {
-    const cible = resoudreConsoleAmont(ref, idx);
-    if (!cible || !cible.base) return refuser(socket, 404);
-    const scheme = cible.base.startsWith('https') ? 'wss' : 'ws';
-    const host = cible.base.replace(/^https?:\/\//, '');
-    const amont = `${scheme}://${host}/${reste}` + (url.search || '');
-    const ws = accepter(req, socket, {});
-    let up;
-    try { up = await connecter(amont, { pin: cible.pin || null }); }
-    catch { return ws.fermerCode(1011, 'console injoignable'); }
-    // Relais bidirectionnel binaire/texte.
-    ws.on('binaire', d => up.envoyerBinaire(d));
-    ws.on('texte', t => up.envoyerTexte(t));
-    up.on('binaire', d => ws.envoyerBinaire(d));
-    up.on('texte', t => ws.envoyerTexte(t));
-    ws.on('fermeture', () => up.close());
-    up.on('fermeture', () => ws.close());
-  }
-
-  async function mandaterConsole(req, res, url, ctx) {
-    const m = /^\/console\/([A-Za-z0-9_-]{16})\/(\d+)\/(.*)$/.exec(url.pathname);
-    if (!m) return repondreJson(res, 404, { error: 'Introuvable.' });
-    // Session complète, rôle membre : le mandataire donne le contrôle de la carte.
-    let s;
-    try { s = socle.portail.exiger(ctx, { role: 'membre' }); void s; } catch (e) { return repondreErreur(res, e, { journal: log }); }
-    const cible = resoudreConsoleAmont(m[1], Number(m[2]));
-    if (!cible || !cible.base) return repondreJson(res, 404, { error: 'Console introuvable.' });
-    const corps = ['POST', 'PUT', 'PATCH'].includes(req.method) ? await lireCorps(req, { json: false, limite: 8 * 1024 * 1024 }) : null;
-    req.params = { reste: m[3] };
-    mandaterHttp(req, res, { base: cible.base, prefix: `/console/${m[1]}/${m[2]}/`, pin: cible.pin, corps });
-  }
-
-  // Résout un (ref, idx) en cible amont, CÔTÉ SERVEUR, limitée aux consoles
-  // enregistrées : le client ne fournit jamais l'adresse.
-  function resoudreConsoleAmont(ref, idx) {
-    const id = parc.idDe(ref); if (!id) return null;
-    const item = parc.entreeConsole(id, idx); if (!item) return null;
-    if (item.type === 'mesh') return { base: (cfg.meshUrl || '').replace(/\/+$/, ''), item, pin: null };
-    if (!/^https?:\/\//i.test(item.target)) return null;
-    return { base: item.target.replace(/\/+$/, ''), item, pin: item.pin || null };
   }
 
   serveur.headersTimeout = 20000;
@@ -195,8 +154,16 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
   serveur.keepAliveTimeout = 5000;
   await new Promise(r => serveur.listen(cfg.port, cfg.hote, r));
   log.info(`Sentinel ${VERSION} à l'écoute sur ${cfg.hote}:${serveur.address().port}`);
-  const arreter = () => new Promise(r => { socle.arreter(); clearInterval(bCollecte); clearInterval(bAutos); clearInterval(bPurge); serveur.close(() => { db.close(); r(); }); serveur.closeAllConnections?.(); });
-  return { serveur, socle, cfg, db, parc, agents, alertes, taches, api, arreter };
+  if (consoles) {
+    await consoles.ecouter(cfg.consolePort, cfg.hote);
+    log.info(`Consoles web sur ${cfg.hote}:${consoles.serveur.address().port}, servies à ${consoles.origine}`);
+    const hoteConsoles = new URL(consoles.origine).hostname;
+    if ([cfg.urlEnrolement, socle.cfg.urlPublique].some(u => u && new URL(u).hostname === hoteConsoles)) {
+      log.warn?.(`SENTINEL_CONSOLE_URL partage le nom d'hôte de Sentinel : les scripts des cartes restent à part, pas les cookies. Donne-lui son propre nom (README, « Consoles et cartes de gestion »).`);
+    }
+  }
+  const arreter = () => new Promise(r => { socle.arreter(); clearInterval(bCollecte); clearInterval(bAutos); clearInterval(bPurge); consoles?.arreter(); serveur.close(() => { db.close(); r(); }); serveur.closeAllConnections?.(); });
+  return { serveur, socle, cfg, db, parc, agents, alertes, taches, api, consoles, arreter };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

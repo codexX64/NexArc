@@ -19,7 +19,7 @@ COPY agent ./agent
 RUN mkdir -p /data && chown sentinel:sentinel /data && chmod 700 /data
 USER sentinel
 ENV NODE_ENV=production DATA_DIR=/data PORT=8090
-EXPOSE 8090
+EXPOSE 8090 8091
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:8090/api/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
