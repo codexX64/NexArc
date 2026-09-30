@@ -1,0 +1,111 @@
+{
+  "$schema": "https://raw.githubusercontent.com/CodexX64/hub-registry/main/schema/hub-extension.v1.json",
+  "manifestVersion": 1,
+  "id": "sentinel",
+  "name": "Sentinel RMM",
+  "version": "2.0.0",
+  "description": "Le parc sous les yeux : agents d'inventaire, tâches distantes, correctifs, consoles intégrées et réveil des machines — auto-hébergé, sur le socle commun.",
+  "icon": "shield",
+  "repository": "https://github.com/CodexX64/sentinel-rmm",
+  "license": "MIT",
+  "minHubVersion": "0.5.64",
+  "install": {
+    "type": "compose",
+    "compose": "deploy/compose.hub.yml",
+    "remote": {
+      "supported": true,
+      "label": "Adresse de Sentinel",
+      "placeholder": "http://192.0.2.40:8090",
+      "defaultPort": 8090,
+      "setupHelp": "Pour un Sentinel déjà en service ailleurs : poser SENTINEL_HUB_TOKEN dans son environnement, redémarrer, puis coller ce jeton ici."
+    },
+    "healthcheck": { "type": "http", "path": "/api/health", "expect": 200, "timeout": "5s" },
+    "arch": ["amd64", "arm64"],
+    "resources": { "ramMb": 256, "cpu": 0.5, "diskMb": 1024 },
+    "ports": [{ "name": "http", "container": 8090, "protocol": "http", "expose": "proxy" }],
+    "volumes": [{ "name": "data", "path": "/data" }]
+  },
+  "config": [
+    { "key": "IMAGE_TAG", "label": "Version de l'image", "type": "string", "default": "latest", "advanced": true, "help": "Étiquette de l'image publiée sur ghcr.io." },
+    { "key": "HUB_TOKEN", "label": "Jeton de service", "type": "secret", "generate": "random:32", "help": "Créé par le Hub. Il ouvre l'API de Sentinel au Hub (état, tâches, réveils) — jamais les comptes ni les réglages d'authentification." },
+    { "key": "SENTINEL_ALLOW_EXEC", "label": "Autoriser la commande libre", "type": "select", "default": "0", "options": [{ "value": "0", "label": "Non — installer/désinstaller/mettre à jour seulement" }, { "value": "1", "label": "Oui — commande libre (réservée aux admins, sous renfort)" }], "help": "Même activée, une commande libre exige le rôle administrateur et une confirmation récente." },
+    { "key": "SENTINEL_MAX_MACHINES", "label": "Plafond de machines", "type": "number", "default": 5000, "min": 1, "advanced": true },
+    { "key": "SENTINEL_ALERT_OFFLINE_MINUTES", "label": "Alerte : hors ligne au-delà de (min)", "type": "number", "default": 15, "min": 1, "max": 10080, "advanced": true, "help": "Minutes sans remontée d'agent avant d'ouvrir une alerte. Un redémarrage ordinaire reste en dessous." },
+    { "key": "SENTINEL_ALERT_PATCH_DAYS", "label": "Alerte : correctifs de sécurité en attente depuis (jours)", "type": "number", "default": 7, "min": 0, "max": 365, "advanced": true },
+    { "key": "SENTINEL_ALERT_DISK_PERCENT", "label": "Alerte : disque rempli à (%)", "type": "number", "default": 90, "min": 50, "max": 100, "advanced": true },
+    { "key": "SENTINEL_ALERT_RISK", "label": "Alerte : score de risque à partir de", "type": "number", "default": 70, "min": 1, "max": 100, "advanced": true, "help": "Le score ne compte que des défauts constatés par l'agent (antivirus, pare-feu, chiffrement, correctifs de sécurité)." },
+    { "key": "SENTINEL_MESH_URL", "label": "Serveur MeshCentral", "type": "string", "default": "", "advanced": true, "help": "Vide : la prise en main MeshCentral est désactivée." },
+    { "key": "SENTINEL_MESH_USER", "label": "Compte de service Mesh", "type": "string", "default": "", "advanced": true, "help": "Sans le préfixe « user// ». Pour l'auto-login un clic (compte SANS second facteur)." },
+    { "key": "SENTINEL_MESH_LOGIN_KEY", "label": "Clé de connexion Mesh", "type": "secret", "advanced": true, "help": "Clé hex de « meshcentral --logintokenkey ». Sans elle, l'opérateur ouvre le bureau avec sa propre session Mesh." },
+    { "key": "SENTINEL_MESH_EMBED", "label": "Bureau Mesh en iframe", "type": "select", "default": "0", "advanced": true, "options": [{ "value": "0", "label": "Nouvel onglet (fiable)" }, { "value": "1", "label": "Intégré (best-effort)" }] },
+    { "key": "SENTINEL_PUBLIC_URL", "label": "Adresse publique de Sentinel", "type": "string", "default": "", "advanced": true, "help": "Adresse que les agents utiliseront pour joindre Sentinel (vide = celle de la requête d'enrôlement)." },
+    { "key": "SOCLE_HTTP", "label": "Accès sans HTTPS", "type": "select", "default": "0", "required": true, "options": [{ "value": "0", "label": "Non — Sentinel est servi en HTTPS (Relay ou certificat du Hub)" }, { "value": "1", "label": "Oui — réseau de confiance, mode dégradé" }], "help": "Les clés d'accès n'existent qu'en HTTPS. En mode dégradé, l'administrateur se connecte avec mot de passe et application d'authentification, et Sentinel l'affiche partout." },
+    { "key": "SOCLE_CLE", "label": "Clé maîtresse", "type": "secret", "generate": "random:32", "help": "Scelle les secrets d'appareils (VNC, Redfish) et les secrets TOTP. Créée par le Hub, gardée dans son coffre, jamais sur le volume de Sentinel." },
+    { "key": "SOCLE_CLE_ANCIENNE", "label": "Clé maîtresse remplacée", "type": "secret", "advanced": true, "help": "Pendant une rotation seulement : la clé actuelle ici, une neuve dans « Clé maîtresse », redéployer, puis vider ce champ." },
+    { "key": "SOCLE_JETON_INSTALLATION", "label": "Jeton d'installation", "type": "secret", "advanced": true, "help": "Vide : Sentinel en tire un au premier démarrage et l'écrit dans ses journaux. Il ne sert qu'à créer le premier compte." },
+    { "key": "SOCLE_PROXYS", "label": "Relais de confiance", "type": "string", "default": "", "advanced": true, "help": "Plages (CIDR) des relais inverses autorisés à transmettre l'adresse du client. Vide : l'adresse vue est celle de la connexion." },
+    { "key": "SOCLE_ORIGINES", "label": "Origines supplémentaires", "type": "string", "default": "", "advanced": true, "help": "Adresses complètes acceptées en plus de celle de la page, quand un relais réécrit l'hôte." },
+    { "key": "SOCLE_URL_PUBLIQUE", "label": "Adresse publique (courriels)", "type": "string", "default": "", "advanced": true, "help": "Ex. https://sentinel.exemple. Les liens des courriels d'alerte en partent. Obligatoire avec un relais SMTP." },
+    { "key": "SOCLE_SMTP_HOTE", "label": "Relais SMTP", "type": "string", "default": "", "advanced": true, "help": "Vide : les alertes de sécurité restent visibles dans Sentinel, sans courriel." },
+    { "key": "SOCLE_SMTP_PORT", "label": "Port SMTP", "type": "number", "min": 1, "advanced": true, "help": "Vide : 465 en TLS, 587 en STARTTLS." },
+    { "key": "SOCLE_SMTP_SECURITE", "label": "Chiffrement SMTP", "type": "select", "default": "tls", "advanced": true, "options": [{ "value": "tls", "label": "TLS dès la connexion (465)" }, { "value": "starttls", "label": "STARTTLS exigé (587)" }] },
+    { "key": "SOCLE_SMTP_UTILISATEUR", "label": "Identifiant SMTP", "type": "string", "default": "", "advanced": true },
+    { "key": "SOCLE_SMTP_MOTDEPASSE", "label": "Mot de passe SMTP", "type": "secret", "advanced": true },
+    { "key": "SOCLE_SMTP_DE", "label": "Adresse d'expédition", "type": "string", "default": "", "advanced": true }
+  ],
+  "api": {
+    "baseUrl": "{{service.url}}",
+    "auth": { "type": "bearer", "token": "{{service.token}}", "localToken": "HUB_TOKEN", "remoteToken": "HUB_TOKEN" }
+  },
+  "capabilities": {
+    "provides": ["fleet.inventory", "fleet.exec", "fleet.wake"],
+    "requires": [],
+    "accepts": ["memory.learn"]
+  },
+  "triggers": [],
+  "actions": [
+    {
+      "id": "summary", "name": "État du parc", "description": "Les comptes essentiels : machines, en ligne, alertes ouvertes, tâches en attente.",
+      "icon": "chart", "group": "Parc", "capability": "fleet.inventory", "risk": "read", "idempotent": true, "params": [],
+      "request": { "method": "GET", "path": "/api/summary" },
+      "output": { "type": "object", "properties": { "machines": { "type": "number" }, "en_ligne": { "type": "number" }, "alertes": { "type": "number" }, "taches_en_attente": { "type": "number" } } },
+      "sample": { "machines": 12, "en_ligne": 11, "hors_ligne": 1, "alertes": 2, "taches_en_attente": 0 }
+    },
+    {
+      "id": "job.run", "name": "Lancer une tâche sur une machine", "description": "Installation, désinstallation, inventaire ou mise à jour, exécutée par l'agent. La commande libre reste réservée à un opérateur administrateur.",
+      "icon": "play", "group": "Parc", "capability": "fleet.exec", "risk": "destructive",
+      "params": [
+        { "key": "machine_id", "label": "Machine (référence)", "type": "expression", "required": true },
+        { "key": "kind", "label": "Action", "type": "select", "default": "inventory", "options": [{ "value": "install", "label": "Installer" }, { "value": "uninstall", "label": "Désinstaller" }, { "value": "inventory", "label": "Inventaire" }, { "value": "update", "label": "Mises à jour" }] },
+        { "key": "payload", "label": "Charge utile", "type": "expression", "help": "Le paquet, selon l'action." }
+      ],
+      "request": { "method": "POST", "path": "/api/machines/{{params.machine_id}}/jobs", "body": { "kind": "{{params.kind}}", "payload": "{{params.payload}}" } },
+      "output": { "type": "object", "properties": { "ok": { "type": "boolean" }, "id": { "type": "string" } } },
+      "sample": { "ok": true, "id": "a1B2c3D4e5F6g7H8" }
+    },
+    {
+      "id": "wake", "name": "Réveiller une machine", "description": "Wake-on-LAN : en direct, ou relayé par un agent en ligne du même segment.",
+      "icon": "zap", "group": "Parc", "capability": "fleet.wake", "risk": "reversible",
+      "params": [{ "key": "machine_id", "label": "Machine (référence)", "type": "expression", "required": true }],
+      "request": { "method": "POST", "path": "/api/machines/{{params.machine_id}}/wake" },
+      "output": { "type": "object", "properties": { "ok": { "type": "boolean" }, "methods": { "type": "array", "items": { "type": "string" } } } },
+      "sample": { "ok": true, "methods": ["relais serveur-a"] }
+    }
+  ],
+  "probes": [
+    { "id": "reachable", "name": "Joignable", "kind": "state", "request": { "method": "GET", "path": "/api/health" }, "value": "$.ok", "states": { "ok": [true, "true", "ok"] }, "interval": "30s" },
+    { "id": "machines", "name": "Machines enrôlées", "kind": "gauge", "unit": "machines", "request": { "method": "GET", "path": "/api/summary" }, "value": "$.machines", "interval": "5m" },
+    { "id": "offline", "name": "Machines hors ligne", "kind": "gauge", "unit": "machines", "request": { "method": "GET", "path": "/api/summary" }, "value": "$.hors_ligne", "thresholds": { "warn": 1, "crit": 3 }, "interval": "1m" }
+  ],
+  "permissions": {
+    "dockerSocket": "none",
+    "privileged": false,
+    "hostNetwork": false,
+    "capAdd": [],
+    "egress": []
+  },
+  "ai": {
+    "exposeActions": true,
+    "hints": "Sentinel surveille le parc de machines, pas les services Docker — ça, c'est le Hub. « État du parc » d'abord pour les comptes ; une tâche distante est destructive et passe par une validation humaine (une commande libre exige même un opérateur administrateur). Le réveil (WoL) est sans danger. Sentinel raconte tout seul à SYNAPSE (si installé) les machines enrôlées, perdues et revenues, les tâches, les automatisations et les réveils."
+  }
+}

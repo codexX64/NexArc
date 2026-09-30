@@ -1,0 +1,78 @@
+# Sentinel installé par le Hub.
+# Les {{...}} sont remplacés à l'installation : secrets générés, port d'hôte,
+# volume nommé et réseau partagé du Hub.
+services:
+  sentinel:
+    image: ghcr.io/codexx64/sentinel-rmm:{{config.IMAGE_TAG}}
+    container_name: {{service.host}}
+    restart: unless-stopped
+    networks: [hub]
+    ports:
+      - "{{hostport.http}}:8090"
+    volumes:
+      - {{volume.data}}:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    # Réveil réseau en émission directe (SENTINEL_HOST_NET) : il faut alors le
+    # réseau de l'hôte, ce qui ouvre le conteneur au réseau local — désactivé par
+    # défaut. Sans lui, Sentinel réveille via un agent relais du même segment, ce
+    # qui suffit et n'exige aucun privilège réseau : c'est pourquoi on garde le
+    # réseau du Hub, isolé, plutôt que celui de l'hôte.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    environment:
+      PORT: "8090"
+      DATA_DIR: /data
+      # Jeton de service du Hub : ouvre l'API (état, tâches, réveils), jamais les
+      # comptes ni les réglages de sécurité.
+      SENTINEL_HUB_TOKEN: {{config.HUB_TOKEN}}
+      SENTINEL_PUBLIC_URL: "{{config.SENTINEL_PUBLIC_URL}}"
+      SENTINEL_ALLOW_EXEC: "{{config.SENTINEL_ALLOW_EXEC}}"
+      SENTINEL_MAX_MACHINES: "{{config.SENTINEL_MAX_MACHINES}}"
+      SENTINEL_ALERT_OFFLINE_MINUTES: "{{config.SENTINEL_ALERT_OFFLINE_MINUTES}}"
+      SENTINEL_ALERT_PATCH_DAYS: "{{config.SENTINEL_ALERT_PATCH_DAYS}}"
+      SENTINEL_ALERT_DISK_PERCENT: "{{config.SENTINEL_ALERT_DISK_PERCENT}}"
+      SENTINEL_ALERT_RISK: "{{config.SENTINEL_ALERT_RISK}}"
+      SENTINEL_MESH_URL: "{{config.SENTINEL_MESH_URL}}"
+      SENTINEL_MESH_USER: "{{config.SENTINEL_MESH_USER}}"
+      SENTINEL_MESH_LOGIN_KEY: "{{config.SENTINEL_MESH_LOGIN_KEY}}"
+      SENTINEL_MESH_EMBED: "{{config.SENTINEL_MESH_EMBED}}"
+      # Comptes : clé maîtresse gardée par le Hub, accès HTTPS ou mode dégradé,
+      # relais de confiance.
+      SOCLE_CLE: "{{config.SOCLE_CLE}}"
+      SOCLE_CLE_ANCIENNE: "{{config.SOCLE_CLE_ANCIENNE}}"
+      SOCLE_HTTP: "{{config.SOCLE_HTTP}}"
+      SOCLE_JETON_INSTALLATION: "{{config.SOCLE_JETON_INSTALLATION}}"
+      SOCLE_PROXYS: "{{config.SOCLE_PROXYS}}"
+      SOCLE_ORIGINES: "{{config.SOCLE_ORIGINES}}"
+      # Alertes de sécurité par courriel, si un relais est indiqué.
+      SOCLE_URL_PUBLIQUE: "{{config.SOCLE_URL_PUBLIQUE}}"
+      SOCLE_SMTP_HOTE: "{{config.SOCLE_SMTP_HOTE}}"
+      SOCLE_SMTP_PORT: "{{config.SOCLE_SMTP_PORT}}"
+      SOCLE_SMTP_SECURITE: "{{config.SOCLE_SMTP_SECURITE}}"
+      SOCLE_SMTP_UTILISATEUR: "{{config.SOCLE_SMTP_UTILISATEUR}}"
+      SOCLE_SMTP_MOTDEPASSE: "{{config.SOCLE_SMTP_MOTDEPASSE}}"
+      SOCLE_SMTP_DE: "{{config.SOCLE_SMTP_DE}}"
+      # SYNAPSE, la mémoire du parc : Sentinel y raconte les machines enrôlées,
+      # perdues et revenues, les tâches, les automatisations et les réveils. Le
+      # jeton est un jeton de cerveau dérivé par le Hub, pour ce seul service.
+      SYNAPSE_URL: "{{provider.memory.learn.url}}"
+      SYNAPSE_JETON: "{{provider.memory.learn.jetonCerveau}}"
+
+networks:
+  hub:
+    name: {{hub.network}}
+    external: true
+
+volumes:
+  {{volume.data}}:
+    name: {{volume.data}}
