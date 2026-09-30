@@ -520,10 +520,12 @@ test('origine des consoles : la carte s\'affiche hors de l\'origine de Sentinel,
     assert.ok(!trace.details.includes(u.pathname.slice(3, -1)), 'jamais la passe au journal');
 
     const vitrine = new Client(Number(u.port));
-    vitrine.cookies.set('session-carte', 'ouverte');
     // Un navigateur n'enverrait pas les cookies de Sentinel à une autre origine ;
-    // s'il le faisait, ils ne partiraient pas vers la carte.
+    // s'il le faisait, ils ne partiraient pas vers la carte, seuls ou avec les siens.
     vitrine.cookies.set('sentinel-sid', victor.cookies.get('sentinel-sid'));
+    assert.equal((await vitrine.get(u.pathname)).status, 200);
+    assert.equal(recus.at(-1).cookie, '', 'aucun cookie de Sentinel ne part vers la carte');
+    vitrine.cookies.set('session-carte', 'ouverte');
     const page = await vitrine.get(u.pathname);
     assert.equal(page.status, 200, page.texte.slice(0, 200));
     assert.equal(recus.at(-1).cookie, 'session-carte=ouverte', 'seul le cookie de la carte lui parvient');
