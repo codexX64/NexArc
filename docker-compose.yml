@@ -1,0 +1,44 @@
+# Sentinel seul, sans le Hub : docker compose up -d --build
+# Les réglages viennent de .env (voir .env.example), la clé maîtresse d'un
+# secret Docker (README, « Installation seule »).
+services:
+  sentinel:
+    build: .
+    image: sentinel-rmm:local
+    container_name: sentinel
+    restart: unless-stopped
+    env_file: .env
+    # La clé maîtresse vient d'un fichier hors du volume de données : une copie
+    # du volume ne suffit pas à ouvrir ce qu'elle scelle.
+    environment:
+      SOCLE_CLE_FILE: /run/secrets/socle_cle
+      SOCLE_CLE_ANCIENNE_FILE: /run/secrets/socle_cle_ancienne
+    secrets: [socle_cle, socle_cle_ancienne]
+    ports:
+      - "${SENTINEL_PORT:-8090}:8090"
+    volumes:
+      - sentinel-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    # Journaux du conteneur, où part aussi le journal de sécurité : gardés par
+    # le démon Docker, hors de portée du service, cinq fichiers de 10 Mo.
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+secrets:
+  socle_cle:
+    file: ./secrets/socle_cle
+  # Vide, sauf pendant une rotation (README, « Tourner la clé maîtresse »).
+  socle_cle_ancienne:
+    file: ./secrets/socle_cle_ancienne
+
+volumes:
+  sentinel-data:
+    name: sentinel-data

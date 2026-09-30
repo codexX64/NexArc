@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+test
+outils
+deploy
+socle/essai
+socle/test
+src/*.test.js
+agent/test_agent.py
+*.md
+hub.json
+.env
+.env.*
+secrets
+data
+**/__pycache__
