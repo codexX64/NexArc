@@ -392,10 +392,13 @@ sur l'origine des consoles) : le relais doit laisser passer la mise à niveau
 Les données conservées et leur finalité sont décrites dans
 `web/confidentialite.txt`, servi à `/confidentialite.txt`.
 
-En cas d'incident : révoquer les sessions et forcer une réinitialisation depuis
-la page Sécurité, tourner la clé maîtresse et réémettre les jetons de service et
-d'agents, restaurer depuis une sauvegarde. L'exploitant notifie une violation de
-données dans les 72 heures si le droit applicable l'exige.
+En cas d'incident : fermer toutes les sessions et forcer une réinitialisation
+depuis la page Comptes, couper la commande libre (`SENTINEL_ALLOW_EXEC=0`) et
+régénérer le jeton du Hub au redéploiement, révoquer les jetons d'agents
+(`node src/cli.js agents revoquer --tous`), tourner la clé maîtresse, restaurer
+depuis une sauvegarde. `node outils/exercice-incident.mjs` joue ce déroulé de
+bout en bout. L'exploitant notifie une violation de données dans les 72 heures
+si le droit applicable l'exige.
 
 Une faille se signale en privé, par un avis de sécurité GitHub sur le dépôt
 (`Security → Advisories → Report a vulnerability`), jamais dans une issue
