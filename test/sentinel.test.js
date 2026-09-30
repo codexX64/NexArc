@@ -505,6 +505,11 @@ test('hôte sans agent (carte de gestion) et refus d\'URL interdite', async () =
   assert.equal((await admin.post('/api/hosts', { host: 'piege', ctype: 'url', target: 'http://169.254.169.254/latest/' })).status, 422);
   // javascript: refusé
   assert.equal((await admin.post('/api/hosts', { host: 'piege2', ctype: 'url', target: 'javascript:alert(1)' })).status, 422);
+  // Une carte injoignable : la cause, jamais le message réseau ni l'adresse.
+  assert.equal((await admin.post('/api/hosts', { host: 'serveur-eteint', ctype: 'idrac', target: 'https://127.0.0.1:1' })).status, 200);
+  const eteint = await admin.get(`/api/machines/${refMachineParHote('serveur-eteint')}/pin?idx=0`);
+  assert.equal(eteint.status, 502);
+  assert.match(eteint.json.error, /^Carte : injoignable \(réf\. [0-9a-f]{8}\)\.$/);
 });
 
 test('automatisations : création, activation, exécution ; un cmd exige l\'admin', async () => {
@@ -814,6 +819,11 @@ test('alimentation : allumer reste au membre ; couper, arrêter, redémarrer, fo
     assert.equal((await admin.post(`/api/machines/${mref}/power`, { action: 'redemarrer' })).status, 200);
     assert.deepEqual(carte.actions, ['On', 'ForceRestart'], 'seules les actions permises ont atteint la carte');
     assert.equal(carte.refus(), 0, 'identifiants rescellés correctement déchiffrés');
+    // Une carte qui refuse : une cause et une référence, jamais sa réponse ni son adresse.
+    assert.equal((await admin.put(`/api/machines/${mref}/redfish`, { url: carte.url, user: 'root', password: 'mauvais-mot-de-passe' })).status, 200);
+    const refusee = await membre.get(`/api/machines/${mref}/power`);
+    assert.equal(refusee.status, 502);
+    assert.match(refusee.json.error, /^Alimentation illisible : refusée par la carte \(réf\. [0-9a-f]{8}\)\.$/);
   } finally { await carte.fermer(); }
 });
 

@@ -74,7 +74,7 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
   const agents = new Agents(db, { parc, maxMachines: cfg.maxMachines, synapse, alertes, flux: l => flux.pousser({ t: 'flux', ...l }) });
   const taches = new Taches(db, { parc, synapse, journal: socle.journal, flux, commandeLibre: cfg.commandeLibre });
   const consoles = cfg.consoleUrl ? new OrigineConsoles({ url: cfg.consoleUrl, parc, comptes: socle.comptes, proxys: socle.portail.proxys, journal: socle.journal, racine: RACINE }) : null;
-  const api = creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine: RACINE, consoles });
+  const api = creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine: RACINE, consoles, log });
   // Données d'un compte : exportées à sa demande, neutralisées à sa suppression.
   socle.portail.exporteur = compteId => parc.donneesDe(compteId);
   socle.comptes.apresSuppression.push(compteId => parc.oublier(compteId));

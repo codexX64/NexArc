@@ -61,7 +61,21 @@ const S = {
 // exige (lecture, membre, admin). La déclaration ne remplace pas le contrôle,
 // fait dans le gestionnaire : l'essai « autorisation » balaie toutes les routes
 // et vérifie que l'un et l'autre concordent.
-export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine, consoles }) {
+// Une carte en échec : l'opérateur lit une cause courte et une référence ; le
+// détail (adresse, message réseau, réponse brute de la carte) ne va qu'au
+// journal du serveur, sous la même référence. Ce n'est pas une erreur interne
+// de Sentinel : 502, rendu par l'aiguillage, hors du compte que suit la vigie.
+class CarteEnEchec extends Error {}
+function causeCarte(e) {
+  const m = String(e?.message || '');
+  if (/délai|ETIMEDOUT/i.test(m)) return 'délai dépassé';
+  if (/interdite/.test(m)) return 'adresse interdite';
+  if (/épingl|certificat|certificate|SSL|TLS/i.test(m)) return 'certificat refusé';
+  if (/répond|système|ResetType|action/i.test(m)) return 'refusée par la carte';
+  return 'injoignable';
+}
+
+export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine, consoles, log = console }) {
   const r = new Routeur();
   const { portail, journal, limiteur } = socle;
   const debitReveil = new Debit({ max: 30 }), debitPower = new Debit({ max: 20 }), debitIngest = new Debit({ max: cfg.ingestMinute });
@@ -88,6 +102,11 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return refuserPreuve(ctx, 'Jeton de service invalide.');
   };
   const session = (ctx, opts = {}) => portail.exiger(ctx, { role: 'lecture', ...opts });
+  const carteEnEchec = (quoi, m) => e => {
+    const ref = crypto.randomBytes(4).toString('hex');
+    log.warn?.(`[carte] ${quoi} ${m.host} (réf. ${ref}) : ${String(e?.message || e).slice(0, 300)}`);
+    throw new CarteEnEchec(`${quoi} : ${causeCarte(e)} (réf. ${ref}).`);
+  };
   const machine = ref => parc.idDe(ref) ?? (() => { throw new ErreurHttp(404, 'Machine introuvable.'); })();
   const meshActif = () => !!cfg.meshUrl;
 
@@ -212,7 +231,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     session(ctx, { role: 'admin', renfort: true });
     const m = parc.machine(machine(ctx.params.ref));
     const { host, port } = ciblePinTLS(m, ctx.url.searchParams);
-    const vu = await observer(host, port).catch(e => { throw new ErreurHttp(502, `Carte injoignable : ${e.message}`); });
+    const vu = await observer(host, port).catch(carteEnEchec('Carte', m));
     return { fp: vu.fp, sujet: vu.sujet };
   }, { role: 'admin' });
   r.post('/api/machines/:ref/pin', async ctx => {
@@ -221,7 +240,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const m = parc.machine(id);
     const b = await corps(ctx, S.pin);
     const { host, port, idx, redfish: rf } = ciblePinTLS(m, new URLSearchParams(b.redfish ? { redfish: '1' } : { idx: String(b.idx ?? 0) }));
-    const vu = await observer(host, port).catch(e => { throw new ErreurHttp(502, `Carte injoignable : ${e.message}`); });
+    const vu = await observer(host, port).catch(carteEnEchec('Carte', m));
     if (empreinte(vu.fp) !== empreinte(String(b.fp))) throw new ErreurHttp(409, 'L\'empreinte a changé depuis l\'affichage : recommence.');
     if (rf) parc.poserPinRedfish(id, { fp: vu.fp, pem: vu.pem });
     else parc.poserPinConsole(id, idx, { fp: vu.fp, pem: vu.pem });
@@ -248,8 +267,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const conf = parc.redfishConf(m);
     if (!conf) throw new ErreurHttp(409, 'Contrôle d\'alimentation non configuré.');
     if (/^https/i.test(conf.base) && !conf.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé : confirme son empreinte.');
-    try { return await redfish.etat(conf.base, { user: conf.user, password: conf.password, pin: conf.pin }); }
-    catch (e) { throw new ErreurHttp(502, `Carte injoignable : ${e.message}`); }
+    return await redfish.etat(conf.base, { user: conf.user, password: conf.password, pin: conf.pin }).catch(carteEnEchec('Alimentation illisible', m));
   }, { role: 'membre' });
   // Allumer reste à la portée d'un membre (comme le réveil par le réseau) :
   // rien ne s'interrompt. Couper, arrêter, redémarrer ou forcer un cycle
@@ -263,8 +281,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const conf = parc.redfishConf(m);
     if (!conf) throw new ErreurHttp(409, 'Contrôle d\'alimentation non configuré.');
     if (/^https/i.test(conf.base) && !conf.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé.');
-    let used; try { used = await redfish.agir(conf.base, { user: conf.user, password: conf.password, pin: conf.pin }, b.action); }
-    catch (e) { throw new ErreurHttp(502, `Action refusée : ${e.message}`); }
+    const used = await redfish.agir(conf.base, { user: conf.user, password: conf.password, pin: conf.pin }, b.action).catch(carteEnEchec('Action non faite', m));
     synapse?.alimentation(m.host, b.action);
     journal.ecrire({ acteur: ctx.session.compte, action: 'alimentation', objet: m.host, ip: ctx.ip, details: { action: b.action } });
     return { ok: true, action: b.action, reset_type: used };
@@ -530,6 +547,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       ctx.params = t.params;
       let reponse;
       try { reponse = await t.route.gestionnaire(ctx); } catch (e) {
+        if (e instanceof CarteEnEchec) { repondreJson(ctx.res, 502, { error: e.message }); return true; }
         if (e instanceof Refus) journal.rare(`refus:${ctx.session?.compte ?? ctx.ip}:${p}`, { acteur: ctx.session?.compte ?? null, action: 'acces.refuse', objet: p, ip: ctx.ip, resultat: 'refus', details: { cause: e.message } });
         throw e;
       }
