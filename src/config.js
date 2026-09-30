@@ -43,12 +43,14 @@ export function lireConfigSentinel(env = process.env) {
     // Prise en main à distance MeshCentral (facultatif). URL vide : désactivé.
     meshUrl: { env: 'SENTINEL_MESH_URL', type: 'url' },
     meshUser: { env: 'SENTINEL_MESH_USER', type: 'chaine' },
-    meshCle: { env: 'SENTINEL_MESH_LOGIN_KEY', type: 'chaine', motif: /^[0-9a-fA-F]{0,128}$/ },
+    // Clé de « meshcentral --logintokenkey » : 80 octets en hexadécimal, dont les
+    // 32 premiers chiffrent le jeton ; plus courte, elle échouerait au premier bureau ouvert.
+    meshCle: { env: 'SENTINEL_MESH_LOGIN_KEY', type: 'chaine', motif: /^(?:[0-9a-fA-F]{2}){32,80}$/ },
     meshViewmode: { env: 'SENTINEL_MESH_VIEWMODE', type: 'chaine', motif: /^\d{1,3}$/, defaut: '11' },
     meshHide: { env: 'SENTINEL_MESH_HIDE', type: 'chaine', motif: /^\d{0,3}$/, defaut: '' },
     meshEmbed: { env: 'SENTINEL_MESH_EMBED', type: 'booleen', defaut: false },
     // Intégration SYNAPSE : la mémoire du parc. Sans URL ni jeton, rien ne part.
     synapseUrl: { env: 'SYNAPSE_URL', type: 'url' },
-    synapseJeton: { env: 'SYNAPSE_JETON', type: 'chaine' },
+    synapseJeton: { env: 'SYNAPSE_JETON', type: 'secret', min: 24 },
   }, env);
 }

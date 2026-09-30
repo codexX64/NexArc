@@ -23,6 +23,7 @@ import https from 'node:https';
 
 const JETON_HUB = 'jeton-du-hub-pour-les-essais-0123456789';
 const INSTALL = 'jeton-installation-sentinel-essai';
+const JETON_SYNAPSE = 'cer_sentinel_jeton-de-cerveau-des-essais';
 const SILENCE = { info() {}, warn() {}, error() {} };
 let s, syn, admin, membre, autre, lecteur, base, env;
 
@@ -30,7 +31,7 @@ async function lancer(dossier, extra = {}) {
   env = {
     PORT: '0', HOTE: '127.0.0.1', DATA_DIR: dossier, SENTINEL_HUB_TOKEN: JETON_HUB, SENTINEL_ALLOW_EXEC: '1',
     SOCLE_CLE: crypto.randomBytes(32).toString('base64'), SOCLE_JETON_INSTALLATION: INSTALL,
-    SYNAPSE_URL: syn.url, SYNAPSE_JETON: 'cer_sentinel_essai', ...extra,
+    SYNAPSE_URL: syn.url, SYNAPSE_JETON: JETON_SYNAPSE, ...extra,
   };
   const x = await demarrer(env, { log: SILENCE });
   return { ...x, port: x.serveur.address().port, client: () => new Client(x.serveur.address().port) };
@@ -81,7 +82,7 @@ async function ecouter(client) {
 }
 
 before(async () => {
-  syn = await fauxSynapse();
+  syn = await fauxSynapse(JETON_SYNAPSE);
   base = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-'));
   s = await lancer(base);
   admin = s.client();
@@ -463,6 +464,16 @@ test('base des premières 2.0 : codes d\'inscription en clair écartés, table r
 
 test('une configuration invalide arrête le démarrage', async () => {
   await assert.rejects(() => demarrer({ ...env, DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 's-')), SENTINEL_HUB_TOKEN: 'court', PORT: 'abc' }, { log: SILENCE }), /PORT|SENTINEL_HUB_TOKEN/);
+  // Un démarrage qui aboutirait est arrêté aussitôt : l'essai échoue au lieu de laisser un serveur ouvert.
+  const erreurDe = async extra => {
+    let x;
+    try { x = await demarrer({ ...env, DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 's-')), ...extra }, { log: SILENCE }); } catch (e) { return e.message; }
+    await x.arreter();
+    return 'démarré';
+  };
+  for (const [variable, valeur] of [['SENTINEL_MESH_LOGIN_KEY', 'abcd'], ['SENTINEL_MESH_LOGIN_KEY', '0'.repeat(63)], ['SYNAPSE_JETON', 'court'], ['SYNAPSE_JETON', 'changeme-changeme-changeme']]) {
+    assert.match(await erreurDe({ [variable]: valeur }), new RegExp(variable), `${variable}=${valeur}`);
+  }
 });
 
 test('WebSocket : origine étrangère refusée, version non 13 refusée', async () => {
