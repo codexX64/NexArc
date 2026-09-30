@@ -165,6 +165,11 @@ class Durcissement(unittest.TestCase):
             m = re.search(r"KINDS = new Set\(\[([^\]]+)\]\)", f.read())
         self.assertEqual(agent.KINDS, set(re.findall(r"'([a-z]+)'", m.group(1))))
 
+    def test_motif_de_paquet_identique_au_serveur(self):
+        with open(os.path.join(RACINE, 'src', 'taches.js'), encoding='utf-8') as f:
+            m = re.search(r"export const PAQUET = /(.+)/;", f.read())
+        self.assertEqual(agent.PAQUET.pattern, m.group(1))
+
     def test_aucun_shell_interprete(self):
         rc, out = agent.run(['echo', 'a; echo b $HOME'])
         self.assertEqual((rc, out.strip()), (0, 'a; echo b $HOME'))

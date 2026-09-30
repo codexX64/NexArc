@@ -10,6 +10,22 @@ import { nouvelleRef, secondes } from './base.js';
 
 export const KINDS = new Set(['cmd', 'install', 'uninstall', 'inventory', 'update', 'wol']);
 export const CIBLES = new Set(['tous', 'site', 'host', 'oskind']);
+// Ce qu'un opérateur, une automatisation ou le Hub peut demander. « wol » n'en
+// fait pas partie : seule la route de réveil en crée, avec l'adresse MAC et la
+// diffusion qu'elle calcule elle-même.
+export const DEMANDES = ['cmd', 'install', 'uninstall', 'inventory', 'update'];
+// Le motif de l'agent (PAQUET dans sentinel-agent.py) : un nom de paquet ne
+// commence jamais par un tiret, il ne peut pas devenir une option.
+export const PAQUET = /^[A-Za-z0-9][A-Za-z0-9._+:@/-]{0,120}$/;
+
+// Message d'erreur si la charge ne convient pas à son type, sinon null.
+export function chargeRefusee(kind, payload) {
+  if (kind === 'inventory') return payload ? 'L\'inventaire ne prend aucune charge.' : null;
+  if (kind === 'update') return payload && !PAQUET.test(payload) ? 'Nom de paquet invalide.' : null;
+  if (kind === 'install' || kind === 'uninstall') return PAQUET.test(payload) ? null : 'Nom de paquet invalide.';
+  if (kind === 'cmd') return payload ? null : 'Commande manquante.';
+  return 'Type de tâche non admis.';
+}
 
 export class Taches {
   constructor(db, { parc, synapse, journal, flux, commandeLibre = false }) {

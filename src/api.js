@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ErreurHttp, Routeur, Debit, lireCorps, valider, repondreJson, egal } from '../socle/src/index.js';
-import { KINDS, CIBLES } from './taches.js';
+import { DEMANDES, CIBLES, chargeRefusee } from './taches.js';
 import { TYPES, typesPublics, normaliser, cibleInterdite } from './consoles.js';
 import { nodeValide, urlBureau } from './mesh.js';
 import { sousReseau, diffusionDirigee, emettre } from './wol.js';
@@ -28,7 +28,7 @@ const S = {
     patch: { type: 'entier', min: 0, max: 999, defaut: 0 }, mesh_node: { type: 'chaine', max: 200, defaut: '' },
     inventory: { type: 'json', profondeur: 6 }, software: { type: 'liste', max: 3000, de: { type: 'json', profondeur: 4 } }, updates: { type: 'liste', max: 800, de: { type: 'json', profondeur: 4 } },
   },
-  tache: { kind: { type: 'chaine', requis: true, parmi: [...KINDS] }, payload: { type: 'chaine', max: 4000, defaut: '' } },
+  tache: { kind: { type: 'chaine', requis: true, parmi: DEMANDES }, payload: { type: 'chaine', max: 4000, defaut: '' } },
   resultat: { output: { type: 'chaine', max: 200000, defaut: '' }, rc: { type: 'entier', min: -2147483648, max: 2147483647, defaut: 0 } },
   consoles: { consoles: { type: 'liste', max: 8, requis: true, de: { type: 'json', profondeur: 4 } } },
   meshNode: { mesh_node: { type: 'chaine', max: 200, defaut: '' } },
@@ -40,7 +40,7 @@ const S = {
     target: { type: 'chaine', requis: true, max: 500 }, label: { type: 'chaine', max: 40, defaut: '' }, embed: { type: 'booleen', defaut: true },
   },
   auto: {
-    nom: { type: 'chaine', requis: true, max: 60 }, kind: { type: 'chaine', requis: true, parmi: [...KINDS] }, payload: { type: 'chaine', max: 2000, defaut: '' },
+    nom: { type: 'chaine', requis: true, max: 60 }, kind: { type: 'chaine', requis: true, parmi: DEMANDES }, payload: { type: 'chaine', max: 2000, defaut: '' },
     cible: { type: 'chaine', parmi: [...CIBLES], defaut: 'tous' }, cible_val: { type: 'chaine', max: 60, defaut: '' },
     toutes_h: { type: 'entier', min: 1, max: 720, defaut: 24 }, heure: { type: 'entier', min: 0, max: 23, defaut: 2 },
   },
@@ -117,7 +117,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       if (!cfg.commandeLibre) throw new ErreurHttp(403, 'Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
       portail.exiger(ctx, { role: 'admin', renfort: true });
     }
-    if (b.kind !== 'inventory' && !b.payload.trim()) throw new ErreurHttp(422, 'Commande ou paquet manquant.');
+    const refus = chargeRefusee(b.kind, b.payload.trim());
+    if (refus) throw new ErreurHttp(422, refus);
     if (taches.enAttente(id) >= 20) throw new ErreurHttp(429, 'Trop de tâches en attente sur cette machine.');
     const t = taches.creer(id, { kind: b.kind, payload: b.payload.trim(), auteur: hub ? 'hub' : s.compteLigne.identifiant, auteurCompte: hub ? null : s.compte, sensible: b.kind === 'cmd' });
     return { ok: true, id: t.ref };
@@ -301,7 +302,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     session(ctx, { role: 'membre' });   // auth d'abord : anon → 401, lecture → 403
     const b = await corps(ctx, S.auto);
     commandeLibre(ctx, b.kind);
-    if (b.kind !== 'inventory' && b.kind !== 'update' && !b.payload.trim()) throw new ErreurHttp(422, 'Commande ou paquet requis.');
+    const refus = chargeRefusee(b.kind, b.payload.trim());
+    if (refus) throw new ErreurHttp(422, refus);
     if (b.cible !== 'tous' && !b.cible_val.trim()) throw new ErreurHttp(422, 'Précise la cible.');
     const ref = crypto.randomBytes(12).toString('base64url');
     db.prepare(`INSERT INTO automatisations(ref, nom, kind, payload, cible, cible_val, toutes_h, heure, actif) VALUES(?,?,?,?,?,?,?,?,1)`)

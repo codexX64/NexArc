@@ -212,6 +212,19 @@ test('agent : code d\'inscription à usage unique, remontée, relève et résult
   assert.equal((await membre.req('POST', '/api/ingest', { hostname: 'x', oskind: 'lin', cpu: 0, ram: 0, disk: 0 }, { entetes: { 'x-agent-token': 'sag_faux' }, origine: null })).status, 401);
 });
 
+test('tâches : charge validée selon le type, réveil réservé à sa route (opérateur, automatisation ou Hub)', async () => {
+  await enroler(membre, { hostname: 'poste-charges' });
+  const mref = refMachineParHote('poste-charges');
+  const hub = { entetes: { authorization: `Bearer ${JETON_HUB}` }, origine: null };
+  for (const [kind, payload, attendu] of [['install', 'paquet; rm -rf /', 422], ['install', '--config=/etc/shadow', 422], ['install', '', 422], ['uninstall', '$(id)', 422],
+    ['update', 'a b', 422], ['inventory', 'quelque chose', 422], ['wol', '01:23:45:67:89:ab|203.0.113.9', 400], ['install', 'htop', 200], ['update', '', 200], ['inventory', '', 200]]) {
+    assert.equal((await membre.post(`/api/machines/${mref}/jobs`, { kind, payload })).status, attendu, `${kind} « ${payload} »`);
+  }
+  assert.equal((await s.client().req('POST', `/api/machines/${mref}/jobs`, { kind: 'wol', payload: '01:23:45:67:89:ab|203.0.113.9' }, hub)).status, 400, 'le Hub non plus');
+  assert.equal((await membre.post('/api/automations', { nom: 'Réveils', kind: 'wol', payload: '01:23:45:67:89:ab', cible: 'tous' })).status, 400);
+  assert.equal((await membre.post('/api/automations', { nom: 'Paquet piégé', kind: 'install', payload: 'a;b', cible: 'tous' })).status, 422);
+});
+
 test('commande libre : rôle admin + renfort ; un membre ne peut pas', async () => {
   const en = await enroler(membre, { hostname: 'poste-cmd' });
   const mref = refMachineParHote('poste-cmd');
