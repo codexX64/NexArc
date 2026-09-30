@@ -18,7 +18,7 @@ import { OrigineConsoles } from './origine-consoles.js';
 import { verifierUpgrade, accepter, refuser } from './websocket.js';
 import {
   Debit, ErreurHttp, demarrerSocle, entetesSecurite, envelopper, nonceCsp, politiqueContenu,
-  repondreErreur, repondreJson, servirFichier, origineDe,
+  repondreErreur, repondreJson, servirFichier, origineDe, adresseClient,
 } from '../socle/src/index.js';
 
 const RACINE = path.resolve(import.meta.dirname, '..');
@@ -27,11 +27,16 @@ const CONSOLE = { info: (...a) => console.log(...a), warn: (...a) => console.war
 const CONTACT_SECURITE = 'https://github.com/CodexX64/sentinel-rmm/security/advisories/new';
 
 // Diffuseur d'activité en direct (SSE). Chaque flux ouvert reçoit les lignes ;
-// un flux fermé se retire de lui-même.
+// un flux fermé se retire de lui-même. Un flux tient une connexion ouverte :
+// quelques onglets par session, deux cents en tout.
+const FLUX_PAR_SESSION = 4, FLUX_MAX = 200;
 class Flux {
-  constructor() { this.abonnes = new Set(); }
-  brancher(res) {
-    this.abonnes.add(res);
+  constructor() { this.abonnes = new Map(); }
+  place(session) {
+    return this.abonnes.size < FLUX_MAX && [...this.abonnes.values()].filter(s => s === session).length < FLUX_PAR_SESSION;
+  }
+  brancher(res, session) {
+    this.abonnes.set(res, session);
     res.write(': ok\n\n');
     const battement = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* fermé */ } }, 25000);
     battement.unref?.();
@@ -39,7 +44,7 @@ class Flux {
   }
   pousser(obj) {
     const ligne = `data: ${JSON.stringify(obj)}\n\n`;
-    for (const res of this.abonnes) { try { res.write(ligne); } catch { this.abonnes.delete(res); } }
+    for (const res of this.abonnes.keys()) { try { res.write(ligne); } catch { this.abonnes.delete(res); } }
   }
 }
 
@@ -113,6 +118,8 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
   serveur.on('upgrade', async (req, socket) => {
     try {
       const url = new URL(req.url, 'http://sentinel');
+      // Une mise à niveau compte dans le débit de l'adresse, comme une requête.
+      if (!debit.prendre(adresseClient(req, socle.portail.proxys))) return refuser(socket, 429, 'Too Many Requests');
       const v = verifierUpgrade(req, { origines: origines(req) });
       if (!v.ok) return refuser(socket, v.code, v.erreur);
       // Session du socle exigée et rôle vérifié AVANT la mise à niveau.

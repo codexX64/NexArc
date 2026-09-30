@@ -98,6 +98,12 @@ export class Agents {
     });
   }
 
+  // Vrai pour le jeton d'une machine, ou d'une machine à naître encore valable.
+  jetonConnu(jeton) {
+    const r = this.resoudre(jeton);
+    return !!(r?.id || r?.attente?.expire >= secondes());
+  }
+
   // ---- remontée d'un agent (inventaire, logiciels, mises à jour) ----
   ingest(jeton, body) {
     const r = this.resoudre(jeton);

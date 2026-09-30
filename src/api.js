@@ -14,6 +14,7 @@ import { sousReseau, diffusionDirigee, emettre } from './wol.js';
 import { observer, empreinte } from './tls.js';
 import * as redfish from './redfish.js';
 import * as enroll from './enroll.js';
+import { MAX_AUTOMATISATIONS } from './base.js';
 
 const NOM_HOTE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$/;
 
@@ -98,9 +99,10 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   // Flux d'activité en direct (SSE), à la place du sondage de la 1.x.
   r.get('/api/activite', ctx => {
-    session(ctx);
+    const s = session(ctx);
+    if (!flux.place(s.id)) throw new ErreurHttp(429, 'Trop de flux d\'activité ouverts : ferme un onglet.');
     ctx.res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' });
-    flux.brancher(ctx.res);
+    flux.brancher(ctx.res, s.id);
     return undefined; // la réponse reste ouverte
   }, { role: 'lecture' });
 
@@ -314,7 +316,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }, { hub: true, role: 'membre' });
 
   // ───────── automatisations ─────────
-  r.get('/api/automations', ctx => { session(ctx); return { automations: db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(a => parc.autoPublique(a)) }; }, { role: 'lecture' });
+  r.get('/api/automations', ctx => { session(ctx); return { automations: parc.automatisations() }; }, { role: 'lecture' });
   // Une automatisation « commande libre » est une commande libre répétée : même
   // réglage (SENTINEL_ALLOW_EXEC), même rôle, même renfort, à chaque geste qui
   // la fait exister ou exécuter.
@@ -330,11 +332,12 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const refus = chargeRefusee(b.kind, b.payload.trim());
     if (refus) throw new ErreurHttp(422, refus);
     if (b.cible !== 'tous' && !b.cible_val.trim()) throw new ErreurHttp(422, 'Précise la cible.');
+    if (db.prepare('SELECT COUNT(*) n FROM automatisations').get().n >= MAX_AUTOMATISATIONS) throw new ErreurHttp(409, `${MAX_AUTOMATISATIONS} automatisations au plus : supprime celles qui ne servent plus.`);
     const ref = crypto.randomBytes(12).toString('base64url');
     db.prepare(`INSERT INTO automatisations(ref, nom, kind, payload, cible, cible_val, toutes_h, heure, actif) VALUES(?,?,?,?,?,?,?,?,1)`)
       .run(ref, b.nom, b.kind, b.payload.trim(), b.cible, b.cible_val.trim(), b.toutes_h, b.heure);
     journal.ecrire({ acteur: ctx.session.compte, action: 'automatisation.creee', objet: b.nom, ip: ctx.ip, details: { kind: b.kind } });
-    return { automations: db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(a => parc.autoPublique(a)) };
+    return { automations: parc.automatisations() };
   }, { role: 'membre' });
   r.put('/api/automations/:ref', ctx => {
     session(ctx, { role: 'membre' });
@@ -345,7 +348,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     else if (a.kind === 'cmd') portail.exiger(ctx, { role: 'admin', renfort: true });
     db.prepare('UPDATE automatisations SET actif = ? WHERE id = ?').run(actif ? 1 : 0, a.id);
     journal.ecrire({ acteur: ctx.session.compte, action: actif ? 'automatisation.activee' : 'automatisation.suspendue', objet: a.nom, ip: ctx.ip, details: { kind: a.kind } });
-    return { automations: db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(x => parc.autoPublique(x)) };
+    return { automations: parc.automatisations() };
   }, { role: 'membre' });
   r.del('/api/automations/:ref', ctx => {
     session(ctx, { role: 'admin', renfort: true });
@@ -354,7 +357,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       db.prepare('DELETE FROM automatisations WHERE id = ?').run(a.id);
       journal.ecrire({ acteur: ctx.session.compte, action: 'automatisation.supprimee', objet: a.nom, ip: ctx.ip, details: { kind: a.kind } });
     }
-    return { automations: db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(x => parc.autoPublique(x)) };
+    return { automations: parc.automatisations() };
   }, { role: 'admin' });
   r.post('/api/automations/:ref/run', ctx => {
     session(ctx, { role: 'membre' });
@@ -440,6 +443,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if (!debitIngest.prendre(ctx.ip)) throw new ErreurHttp(429, 'Trop de remontées.');
     controlerEchecs(ctx);
     const jeton = String(ctx.req.headers['x-agent-token'] || '');
+    // Le jeton d'abord : un inconnu ne fait lire ni valider 512 Kio.
+    if (!agents.jetonConnu(jeton)) refuserPreuve(ctx, 'Jeton d\'agent invalide.');
     const b = await corps(ctx, S.ingest, true);
     const res = agents.ingest(jeton, b);
     if (res.erreur === 401) refuserPreuve(ctx, 'Jeton d\'agent invalide.');

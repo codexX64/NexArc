@@ -14,6 +14,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 
 export const REF = /^[A-Za-z0-9_-]{16}$/;
+// Une automatisation vise un site, un système ou tout le parc : quelques
+// dizaines suffisent à un parc réel, deux cents bornent la ronde de chaque minute.
+export const MAX_AUTOMATISATIONS = 200;
 export const nouvelleRef = () => crypto.randomBytes(12).toString('base64url');
 const secondes = () => Date.now() / 1000;
 
@@ -166,8 +169,7 @@ export class Parc {
     const feed = this.db.prepare('SELECT texte, ip, cree FROM flux ORDER BY cree DESC LIMIT 8').all()
       .map(f => ({ html: f.texte, ip: f.ip || '', cree: f.cree }));
     const patches = this.correctifs(rows);
-    const autos = this.db.prepare('SELECT * FROM automatisations ORDER BY id').all().map(a => this.autoPublique(a));
-    return { machines, alertes, patches, autos, feed, intervalle: null };
+    return { machines, alertes, patches, autos: this.automatisations(), feed, intervalle: null };
   }
 
   // Résumé léger pour les sondes du Hub : des comptes, jamais l'état complet.
@@ -210,6 +212,10 @@ export class Parc {
   }
 
   // ---- tâches ----
+  // La création en refuse au-delà de MAX_AUTOMATISATIONS : la liste reste bornée.
+  automatisations() {
+    return this.db.prepare('SELECT * FROM automatisations ORDER BY id LIMIT ?').all(MAX_AUTOMATISATIONS).map(a => this.autoPublique(a));
+  }
   autoPublique(a) {
     return {
       id: a.ref, nom: a.nom, kind: a.kind, payload: a.payload || '', cible: a.cible, cible_val: a.cible_val || '',

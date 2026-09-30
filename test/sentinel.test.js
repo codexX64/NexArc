@@ -269,6 +269,44 @@ test('codes et jetons de machine : chaque échec compte pour l\'adresse, bloqué
   } finally { await x.arreter(); }
 });
 
+test('volumes : flux d\'activité, automatisations et mises à niveau WebSocket bornés ; jeton d\'agent inconnu refusé avant le corps', async () => {
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-volumes-')));
+  const ouverts = [];
+  try {
+    const a = x.client();
+    await adminComplet(a, { jeton: INSTALL });
+    const cookie = [...a.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
+    const ouvrirFlux = () => new Promise(resolve => {
+      const req = http.request({ host: '127.0.0.1', port: x.port, path: '/api/activite', headers: { host: `localhost:${x.port}`, 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0', cookie } }, res => { resolve(res.statusCode); if (res.statusCode !== 200) res.resume(); });
+      req.on('error', () => resolve('erreur'));
+      ouverts.push(req);
+      req.end();
+    });
+    const flux = [];
+    for (let i = 0; i < 5; i++) flux.push(await ouvrirFlux());
+    assert.deepEqual(flux, [200, 200, 200, 200, 429], 'quatre flux par session');
+
+    const inserer = x.db.prepare("INSERT INTO automatisations(ref, nom, kind, cible) VALUES(?, ?, 'inventory', 'tous')");
+    for (let i = 0; i < 199; i++) inserer.run(crypto.randomBytes(12).toString('base64url'), `Auto ${i}`);
+    assert.equal((await a.post('/api/automations', { nom: 'La deux-centième', kind: 'inventory' })).status, 200);
+    assert.equal((await a.post('/api/automations', { nom: 'Une de trop', kind: 'inventory' })).status, 409);
+    assert.equal((await a.get('/api/automations')).json.automations.length, 200);
+
+    // Le jeton d'abord : la réponse part sans attendre les 400 Kio annoncés.
+    const statut = await new Promise(resolve => {
+      const req = http.request({ host: '127.0.0.1', port: x.port, method: 'POST', path: '/api/ingest', headers: { 'content-type': 'application/json', 'content-length': 400000, 'x-agent-token': 'sag_jeton_invente' } }, res => { res.resume(); resolve(res.statusCode); });
+      req.on('error', () => resolve('erreur'));
+      ouverts.push(req);
+      req.flushHeaders();
+    });
+    assert.equal(statut, 401);
+
+    const anonyme = x.client();
+    while ((await anonyme.get('/api/health')).status === 200) { /* le débit de l'adresse s'épuise */ }
+    assert.match(await brancherWs(x.port, '/vnc/AAAAAAAAAAAAAAAA/0', { Origin: anonyme.origine, Cookie: cookie }), / 429 /, 'une mise à niveau compte dans le débit');
+  } finally { for (const r of ouverts) r.destroy(); await x.arreter(); }
+});
+
 test('tâches : charge validée selon le type, réveil réservé à sa route (opérateur, automatisation ou Hub)', async () => {
   await enroler(membre, { hostname: 'poste-charges' });
   const mref = refMachineParHote('poste-charges');
