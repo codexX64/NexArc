@@ -173,8 +173,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       if (!cfg.commandeLibre) refus('Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
       portail.exiger(ctx, { role: 'admin', renfort: true });
     }
-    const refus = chargeRefusee(b.kind, b.payload.trim());
-    if (refus) throw new ErreurHttp(422, refus);
+    const defaut = chargeRefusee(b.kind, b.payload.trim());
+    if (defaut) throw new ErreurHttp(422, defaut);
     if (taches.enAttente(id) >= 20) throw new ErreurHttp(429, 'Trop de tâches en attente sur cette machine.');
     const t = taches.creer(id, { kind: b.kind, payload: b.payload.trim(), auteur: hub ? 'hub' : s.compteLigne.identifiant, auteurCompte: hub ? null : s.compte, sensible: b.kind === 'cmd' });
     return { ok: true, id: t.ref };
@@ -363,8 +363,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     session(ctx, { role: 'membre' });   // auth d'abord : anon → 401, lecture → 403
     const b = await corps(ctx, S.auto);
     commandeLibre(ctx, b.kind);
-    const refus = chargeRefusee(b.kind, b.payload.trim());
-    if (refus) throw new ErreurHttp(422, refus);
+    const defaut = chargeRefusee(b.kind, b.payload.trim());
+    if (defaut) throw new ErreurHttp(422, defaut);
     if (b.cible !== 'tous' && !b.cible_val.trim()) throw new ErreurHttp(422, 'Précise la cible.');
     if (db.prepare('SELECT COUNT(*) n FROM automatisations').get().n >= MAX_AUTOMATISATIONS) throw new ErreurHttp(409, `${MAX_AUTOMATISATIONS} automatisations au plus : supprime celles qui ne servent plus.`);
     const ref = crypto.randomBytes(12).toString('base64url');
@@ -424,8 +424,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const nom = b.name.trim();
     const relais = b.relay;
     // Contrôlé avant de créer le code : ces valeurs finiront dans un script root.
-    const refus = enroll.controler(base, { site, nom });
-    if (refus) throw new ErreurHttp(422, refus);
+    const defaut = enroll.controler(base, { site, nom });
+    if (defaut) throw new ErreurHttp(422, defaut);
     const { code, expire_dans } = agents.nouveauCode({ site, nom, relais });
     const sites = db.prepare("SELECT DISTINCT site FROM machines WHERE site <> '' ORDER BY site").all().map(s => s.site);
     const commands = {}, downloads = {};
@@ -473,8 +473,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const relais = q.relais === '1';
     // Une session d'opérateur ouvre cette route sans code valide : le code, le
     // site et le nom sont donc contrôlés ici, avant d'entrer dans le script.
-    const refus = enroll.controler(baseUrl(ctx), { code, site, nom });
-    if (refus) throw new ErreurHttp(422, refus);
+    const defaut = enroll.controler(baseUrl(ctx), { code, site, nom });
+    if (defaut) throw new ErreurHttp(422, defaut);
     const body = builder(baseUrl(ctx), code, { site, nom, relais });
     ctx.res.writeHead(200, { 'Content-Type': media, 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${fichier}"` });
     ctx.res.end(body);

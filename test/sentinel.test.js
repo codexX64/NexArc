@@ -629,6 +629,7 @@ test('commande libre désactivée : ni créée, ni lancée, ni réactivée, ni e
     await adminComplet(a, { jeton: INSTALL });
     const { jeton } = await enroler(a, { hostname: 'poste-sans-cmd' });
     assert.ok(jeton);
+    assert.equal((await a.post(`/api/machines/${x.db.prepare("SELECT ref FROM machines WHERE host = 'poste-sans-cmd'").get().ref}/jobs`, { kind: 'cmd', payload: 'id' })).status, 403, 'ni en tâche');
     assert.equal((await a.post('/api/automations', { nom: 'Cmd', kind: 'cmd', payload: 'id', cible: 'tous' })).status, 403);
     const refus = x.db.prepare("SELECT objet, details FROM socle_journal WHERE action = 'acces.refuse' ORDER BY n DESC LIMIT 1").get();
     assert.equal(refus.objet, '/api/automations', 'refus décidé par Sentinel, journalisé comme ceux du socle');
@@ -655,6 +656,11 @@ test('le jeton du Hub n\'ouvre que l\'état, les tâches et le réveil', async (
   }
   // jeton faux refusé
   assert.equal((await hub.req('GET', '/api/summary', undefined, { entetes: { authorization: 'Bearer faux' } })).status, 401);
+  // une commande libre ne passe jamais par le Hub, et le refus est journalisé
+  await enroler(membre, { hostname: 'poste-hub-cmd' });
+  const refuse = await s.client().req('POST', `/api/machines/${refMachineParHote('poste-hub-cmd')}/jobs`, { kind: 'cmd', payload: 'id' }, { entetes: h, origine: null });
+  assert.equal(refuse.status, 403, JSON.stringify(refuse.json));
+  assert.match(s.parc.db.prepare("SELECT details FROM socle_journal WHERE action = 'acces.refuse' ORDER BY n DESC LIMIT 1").get().details, /jamais par le Hub/);
 });
 
 test('données d\'un compte : export sous renfort (tâches lancées, alertes acquittées), neutralisées à la suppression', async () => {
