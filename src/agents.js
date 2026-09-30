@@ -48,13 +48,16 @@ export class Agents {
     if (typeof code !== 'string' || code.length > 40) return null;
     const t = secondes();
     const h = hashCode(code);
-    const l = this.db.prepare('SELECT * FROM enrolements WHERE empreinte = ?').get(h);
-    if (!l || l.expire < t) { if (l) this.db.prepare('DELETE FROM enrolements WHERE empreinte = ?').run(h); return null; }
-    this.db.prepare('DELETE FROM enrolements WHERE empreinte = ?').run(h); // consommé
-    const jeton = 'sag_' + crypto.randomBytes(24).toString('base64url');
-    this.db.prepare('INSERT INTO jetons_attente(jeton_hash, site, nom, relais, expire, cree) VALUES(?,?,?,?,?,?)')
-      .run(hashJeton(jeton), l.site, l.nom, l.relais, t + JETON_TTL_MS / 1000, t);
-    return { jeton, site: l.site, nom: l.nom, relais: !!l.relais };
+    // Le code consommé et le jeton tiré, ensemble : jamais l'un sans l'autre.
+    return transaction(this.db, () => {
+      const l = this.db.prepare('SELECT * FROM enrolements WHERE empreinte = ?').get(h);
+      if (l) this.db.prepare('DELETE FROM enrolements WHERE empreinte = ?').run(h);
+      if (!l || l.expire < t) return null;
+      const jeton = 'sag_' + crypto.randomBytes(24).toString('base64url');
+      this.db.prepare('INSERT INTO jetons_attente(jeton_hash, site, nom, relais, expire, cree) VALUES(?,?,?,?,?,?)')
+        .run(hashJeton(jeton), l.site, l.nom, l.relais, t + JETON_TTL_MS / 1000, t);
+      return { jeton, site: l.site, nom: l.nom, relais: !!l.relais };
+    });
   }
 
   codeValide(code) {
@@ -105,7 +108,12 @@ export class Agents {
   }
 
   // ---- remontée d'un agent (inventaire, logiciels, mises à jour) ----
+  // Une remontée écrit la machine, son inventaire et ses alertes : tout ou rien.
   ingest(jeton, body) {
+    return transaction(this.db, () => this.remonter(jeton, body));
+  }
+
+  remonter(jeton, body) {
     const r = this.resoudre(jeton);
     if (!r) return { erreur: 401 };
     const now = secondes();

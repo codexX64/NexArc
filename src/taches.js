@@ -6,7 +6,7 @@
 // sans jamais le contenu sensible (la charge d'une commande libre n'est pas
 // écrite en clair). Un agent ne relève et ne répond qu'à SES tâches : l'agent
 // est identifié par son jeton, jamais par un nom qu'il choisit.
-import { nouvelleRef, secondes } from './base.js';
+import { nouvelleRef, secondes, transaction } from './base.js';
 
 export const KINDS = new Set(['cmd', 'install', 'uninstall', 'inventory', 'update', 'wol']);
 export const CIBLES = new Set(['tous', 'site', 'host', 'oskind']);
@@ -53,9 +53,12 @@ export class Taches {
 
   // Relève par l'agent : uniquement les tâches de SA machine.
   relever(machineId, delaiTache) {
-    const rows = this.db.prepare("SELECT * FROM taches WHERE machine_id = ? AND status = 'attente' ORDER BY id LIMIT 5").all(machineId);
     const now = secondes();
-    for (const r of rows) this.db.prepare("UPDATE taches SET status='cours', debut=? WHERE id=?").run(now, r.id);
+    const rows = transaction(this.db, () => {
+      const dues = this.db.prepare("SELECT * FROM taches WHERE machine_id = ? AND status = 'attente' ORDER BY id LIMIT 5").all(machineId);
+      for (const r of dues) this.db.prepare("UPDATE taches SET status='cours', debut=? WHERE id=?").run(now, r.id);
+      return dues;
+    });
     // Clé « jobs » : le contrat que l'agent (et l'UI) attendent.
     return { jobs: rows.map(r => ({ id: r.ref, kind: r.kind, payload: r.payload })), timeout: delaiTache };
   }
@@ -84,16 +87,20 @@ export class Taches {
     return this.db.prepare(q).all(...args).map(r => r.id);
   }
 
+  // Toutes les tâches d'un passage, ou aucune : un passage interrompu ne laisse
+  // pas la moitié du parc servie et l'automatisation marquée comme faite.
   lancer(row, { acteur = null, now = secondes() } = {}) {
-    const ids = this.ciblesDe(row);
     const sensible = row.kind === 'cmd';
-    for (const mid of ids) {
-      const ref = nouvelleRef();
-      this.db.prepare("INSERT INTO taches(ref, machine_id, kind, payload, sensible, status, cree, auteur) VALUES(?,?,?,?,?,'attente',?,?)")
-        .run(ref, mid, row.kind, row.payload || '', sensible ? 1 : 0, now, `auto:${row.nom}`);
-    }
-    this.db.prepare('UPDATE automatisations SET dernier_run=?, runs=runs+1, dernier_statut=? WHERE id=?')
-      .run(now, ids.length ? `${ids.length} poste(s)` : 'aucun poste', row.id);
+    const ids = transaction(this.db, () => {
+      const cibles = this.ciblesDe(row);
+      for (const mid of cibles) {
+        this.db.prepare("INSERT INTO taches(ref, machine_id, kind, payload, sensible, status, cree, auteur) VALUES(?,?,?,?,?,'attente',?,?)")
+          .run(nouvelleRef(), mid, row.kind, row.payload || '', sensible ? 1 : 0, now, `auto:${row.nom}`);
+      }
+      this.db.prepare('UPDATE automatisations SET dernier_run=?, runs=runs+1, dernier_statut=? WHERE id=?')
+        .run(now, cibles.length ? `${cibles.length} poste(s)` : 'aucun poste', row.id);
+      return cibles;
+    });
     this.journal?.ecrire({ acteur, action: 'automatisation.lancee', objet: row.nom, details: { kind: row.kind, postes: ids.length } });
     if (ids.length) this.synapse?.automatisation(row.nom, row.kind, ids.length);
     return ids.length;

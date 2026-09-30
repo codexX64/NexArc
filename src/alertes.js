@@ -10,7 +10,7 @@
 //
 // Une valeur que l'agent n'a pas su lire (« inconnu », vide) ne change rien :
 // ni ouverture sur une supposition, ni résolution sur un silence.
-import { nouvelleRef, secondes } from './base.js';
+import { nouvelleRef, secondes, transaction } from './base.js';
 
 const GARDE_RESOLUES_J = 30;
 
@@ -104,10 +104,10 @@ export class Alertes {
     const a = this.db.prepare('SELECT * FROM alertes WHERE ref = ?').get(ref);
     if (!a) return false;
     if (a.acquittee) return true;
-    this.db.prepare('UPDATE alertes SET acquittee = ?, acquitte_par = ?, acquitte_compte = ?, maj = ? WHERE id = ?').run(now, identifiant, compte, now, a.id);
-    if (!a.regle && a.etat === 'ouverte') {
-      this.db.prepare("UPDATE alertes SET etat = 'resolue', resolue = ? WHERE id = ?").run(now, a.id);
-    }
+    transaction(this.db, () => {
+      this.db.prepare('UPDATE alertes SET acquittee = ?, acquitte_par = ?, acquitte_compte = ?, maj = ? WHERE id = ?').run(now, identifiant, compte, now, a.id);
+      if (!a.regle && a.etat === 'ouverte') this.db.prepare("UPDATE alertes SET etat = 'resolue', resolue = ? WHERE id = ?").run(now, a.id);
+    });
     return true;
   }
 

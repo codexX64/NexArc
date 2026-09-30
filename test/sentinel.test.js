@@ -533,6 +533,23 @@ test('automatisations : création, activation, exécution ; un cmd exige l\'admi
   assert.equal((await admin.del(`/api/automations/${cref}`)).status, 200);
 });
 
+test('écritures groupées : un passage d\'automatisation interrompu au milieu ne laisse ni tâche ni passage compté', async () => {
+  for (const h of ['poste-lot-a', 'poste-lot-b', 'poste-lot-c']) await enroler(membre, { hostname: h, site: 'Lot' });
+  const a = await membre.post('/api/automations', { nom: 'Lot', kind: 'inventory', cible: 'site', cible_val: 'Lot' });
+  const ref = a.json.automations.find(x => x.nom === 'Lot').id;
+  const taches = () => s.parc.db.prepare("SELECT COUNT(*) n FROM taches WHERE auteur = 'auto:Lot'").get().n;
+  s.parc.db.exec("CREATE TEMP TRIGGER coupure BEFORE INSERT ON taches WHEN (SELECT COUNT(*) FROM taches WHERE auteur = 'auto:Lot') >= 2 BEGIN SELECT RAISE(ABORT, 'coupure au milieu du passage'); END");
+  try {
+    const r = await membre.post(`/api/automations/${ref}/run`);
+    assert.equal(r.status, 500);
+    assert.match(r.json.error, /^Erreur interne \(réf\. /, 'rien de la base ne sort');
+  } finally { s.parc.db.exec('DROP TRIGGER coupure'); }
+  assert.equal(taches(), 0, 'aucune tâche à moitié posée');
+  assert.equal(s.parc.db.prepare('SELECT runs FROM automatisations WHERE ref = ?').get(ref).runs, 0, 'passage non compté');
+  assert.equal((await membre.post(`/api/automations/${ref}/run`)).json.queued, 3);
+  assert.equal(taches(), 3);
+});
+
 test('commande libre désactivée : ni créée, ni lancée, ni réactivée, ni exécutée par la ronde des automatisations', async () => {
   const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-noexec-')), { SENTINEL_ALLOW_EXEC: '0' });
   try {
