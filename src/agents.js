@@ -127,14 +127,16 @@ export class Agents {
     // historique et ses consoles. Sinon on en crée une (dans la limite du parc).
     const legacy = this.db.prepare("SELECT * FROM machines WHERE host = ? AND source = 'agent' AND jeton_hash IS NULL").get(host);
     if (legacy) {
-      this.db.prepare('UPDATE machines SET jeton_hash = ? WHERE id = ?').run(hashJeton(jeton), legacy.id);
+      this.db.prepare("UPDATE machines SET jeton_hash = ?, role = CASE WHEN ? THEN 'relais' ELSE role END WHERE id = ?").run(hashJeton(jeton), a.relais, legacy.id);
       this.db.prepare('DELETE FROM jetons_attente WHERE jeton_hash = ?').run(hashJeton(jeton));
       return this.majMachine(this.parc.machine(legacy.id), body, now);
     }
     const n = this.db.prepare("SELECT COUNT(*) n FROM machines WHERE source = 'agent'").get().n;
     if (n >= this.maxMachines) return { erreur: 429 };
     const ref = nouvelleRef();
-    const role = a.relais ? 'relais' : (body.role || 'poste');
+    // Le rôle vient du code d'inscription, jamais de l'agent : un relais reçoit
+    // les réveils des autres machines de son segment.
+    const role = a.relais ? 'relais' : 'poste';
     const suivi = Array.isArray(body.updates) ? suiviCorrectifs(body.updates, null, now) : { sec_n: 0, sec_depuis: null };
     this.db.prepare(`INSERT INTO machines(ref, jeton_hash, host, ip, site, os, oskind, role, online, risk,
         cpu, ram, disk, av, fw, enc, patch, sec_n, sec_depuis, hist, source, mesh_node, last_report, cree)
@@ -159,9 +161,9 @@ export class Agents {
     // La liste des mises à jour n'arrive qu'un rapport sur douze : entre deux,
     // le suivi des correctifs de sécurité reste celui du dernier constat.
     const suivi = Array.isArray(body.updates) ? suiviCorrectifs(body.updates, m.sec_depuis, now) : { sec_n: m.sec_n || 0, sec_depuis: m.sec_depuis || null };
-    this.db.prepare(`UPDATE machines SET host=?, ip=?, os=?, oskind=?, role=CASE WHEN role='relais' THEN 'relais' ELSE ? END,
+    this.db.prepare(`UPDATE machines SET host=?, ip=?, os=?, oskind=?,
         cpu=?, ram=?, disk=?, av=?, fw=?, enc=?, patch=?, sec_n=?, sec_depuis=?, risk=?, online=1, hist=?, mesh_node=COALESCE(?, mesh_node), last_report=? WHERE id=?`).run(
-      host, body.ip || null, body.os || '', body.oskind, body.role || 'poste',
+      host, body.ip || null, body.os || '', body.oskind,
       body.cpu, body.ram, body.disk, body.av, body.fw, body.enc, body.patch, suivi.sec_n, suivi.sec_depuis, this.risque(body, suivi.sec_n),
       JSON.stringify(hist), body.mesh_node || null, now, m.id);
     this.appliquerInventaire(this.parc.machine(m.id), body, now);

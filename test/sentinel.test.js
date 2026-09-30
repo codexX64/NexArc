@@ -234,6 +234,10 @@ test('agent : code d\'inscription à usage unique, remontée, relève et résult
   assert.equal((await membre.req('POST', `/api/agent/jobs/${t.json.id}/result`, { output: 'ok', rc: 0 }, { entetes: { 'x-agent-token': jeton } })).status, 200);
   // jeton d'agent invalide refusé
   assert.equal((await membre.req('POST', '/api/ingest', { hostname: 'x', oskind: 'lin', cpu: 0, ram: 0, disk: 0 }, { entetes: { 'x-agent-token': 'sag_faux' }, origine: null })).status, 401);
+  // un agent ne se déclare pas relais : le rôle vient du code d'inscription
+  const role = () => s.parc.db.prepare("SELECT role FROM machines WHERE host = 'poste-un'").get().role;
+  assert.equal((await membre.req('POST', '/api/ingest', { hostname: 'poste-un', oskind: 'lin', role: 'relais', cpu: 1, ram: 1, disk: 1 }, { entetes: { 'x-agent-token': jeton }, origine: null })).status, 200);
+  assert.equal(role(), 'poste');
 });
 
 // La ligne de commande d'administration, lancée comme dans le conteneur, sur
