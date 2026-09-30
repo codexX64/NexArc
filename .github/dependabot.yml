@@ -1,0 +1,17 @@
+# Mises à jour proposées, jamais appliquées seules : les actions épinglées par
+# commit, l'image de base épinglée par empreinte, et les dépendances de l'agent
+# épinglées par version et empreintes. Chaque demande est relue.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /agent
+    schedule:
+      interval: weekly
