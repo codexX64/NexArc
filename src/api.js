@@ -18,6 +18,11 @@ import { MAX_AUTOMATISATIONS } from './base.js';
 
 const NOM_HOTE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$/;
 
+// Un refus d'accès décidé ici plutôt que par le socle : l'aiguillage le
+// journalise comme le socle journalise les siens.
+class Refus extends ErreurHttp {}
+const refus = message => { throw new Refus(403, message); };
+
 const S = {
   // Remontée d'un agent : bornée par schéma (champ inconnu refusé, tailles bornées).
   ingest: {
@@ -134,8 +139,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const b = await corps(ctx, S.tache);
     // Commande libre : rôle admin + renfort récent, et seulement si activée.
     if (b.kind === 'cmd') {
-      if (hub) throw new ErreurHttp(403, 'Une commande libre passe par un opérateur, jamais par le Hub.');
-      if (!cfg.commandeLibre) throw new ErreurHttp(403, 'Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
+      if (hub) refus('Une commande libre passe par un opérateur, jamais par le Hub.');
+      if (!cfg.commandeLibre) refus('Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
       portail.exiger(ctx, { role: 'admin', renfort: true });
     }
     const refus = chargeRefusee(b.kind, b.payload.trim());
@@ -322,7 +327,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   // la fait exister ou exécuter.
   const commandeLibre = (ctx, kind) => {
     if (kind !== 'cmd') return;
-    if (!cfg.commandeLibre) throw new ErreurHttp(403, 'Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
+    if (!cfg.commandeLibre) refus('Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
     portail.exiger(ctx, { role: 'admin', renfort: true });
   };
   r.post('/api/automations', async ctx => {
@@ -523,7 +528,11 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       if (!t) throw new ErreurHttp(404, 'Route inconnue.');
       if (t.methodes) { ctx.res.setHeader('Allow', t.methodes.join(', ')); throw new ErreurHttp(405, 'Méthode non admise.'); }
       ctx.params = t.params;
-      const reponse = await t.route.gestionnaire(ctx);
+      let reponse;
+      try { reponse = await t.route.gestionnaire(ctx); } catch (e) {
+        if (e instanceof Refus) journal.rare(`refus:${ctx.session?.compte ?? ctx.ip}:${p}`, { acteur: ctx.session?.compte ?? null, action: 'acces.refuse', objet: p, ip: ctx.ip, resultat: 'refus', details: { cause: e.message } });
+        throw e;
+      }
       if (reponse !== undefined) repondreJson(ctx.res, 200, reponse);
       return true;
     },

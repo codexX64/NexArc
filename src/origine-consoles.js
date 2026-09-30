@@ -101,19 +101,27 @@ export class OrigineConsoles {
     if (!cible) return this.repondre(res, 404, 'Introuvable.');
     // Une écriture ne vient que d'une page de cette origine : une passe qui
     // aurait fui ne sert pas à poster depuis un autre site.
-    if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== this.origine) return this.repondre(res, 403, 'Origine refusée.');
+    if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== this.origine) return this.refuser(req, res, cible);
     const corps = ['POST', 'PUT', 'PATCH'].includes(req.method) ? await lireCorps(req, { json: false, limite: 8 * 1024 * 1024 }) : null;
     this.entetes(res);
     mandaterHttp(req, res, { base: cible.base, reste: m[2], prefix: `/c/${m[1]}/`, pin: cible.pin, corps, parent: cible.parent });
   }
 
+  // Une page d'un autre site qui écrit à la carte par une passe : refusée et
+  // journalisée comme un refus d'accès du service (sans la passe, qui est un droit).
+  refuser(req, res, cible) {
+    const ip = adresseClient(req, this.proxys);
+    this.journal.rare(`consoles:${ip}`, { acteur: cible.compte, action: 'acces.refuse', objet: '/c/', ip, resultat: 'refus', details: { cause: 'origine', origine: String(req.headers.origin).slice(0, 200) } });
+    if (res) return this.repondre(res, 403, 'Origine refusée.');
+  }
+
   async mettreANiveau(req, socket) {
     if (!this.debit.prendre(adresseClient(req, this.proxys))) return refuser(socket, 429, 'Too Many Requests');
     const v = verifierUpgrade(req, { origines: [this.origine] });
-    if (!v.ok) return refuser(socket, v.code, 'Forbidden');
     const url = new URL(req.url, 'http://consoles');
     const m = CHEMIN.exec(url.pathname);
     const cible = m && this.resoudre(m[1]);
+    if (!v.ok) { if (v.code === 403 && cible) this.refuser(req, null, cible); return refuser(socket, v.code, 'Forbidden'); }
     if (!cible) return refuser(socket, 404, 'Not Found');
     const amont = `${cible.base.startsWith('https') ? 'wss' : 'ws'}://${cible.base.replace(/^https?:\/\//, '')}/${m[2]}${url.search}`;
     // La carte d'abord : un message que le navigateur enverrait dès la

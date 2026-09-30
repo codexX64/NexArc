@@ -476,6 +476,8 @@ test('origine des consoles : la carte s\'affiche hors de l\'origine de Sentinel,
 
     // WebSocket de la carte, par la même passe et la même origine.
     assert.match(await brancherWs(Number(u.port), `${u.pathname}ws`, { Origin: victor.origine }), / 403 /, 'origine étrangère refusée');
+    const refus = s.parc.db.prepare("SELECT objet, details FROM socle_journal WHERE action = 'acces.refuse' AND objet = '/c/' ORDER BY n DESC LIMIT 1").get();
+    assert.ok(refus && !refus.details.includes(u.pathname.slice(3, -1)), 'refus de l\'origine des consoles journalisé, sans la passe');
     assert.match(await brancherWs(Number(u.port), `/c/${'A'.repeat(43)}/ws`, { Origin: u.origin }), / 404 /);
     const ws = await connecter(`ws://localhost:${u.port}${u.pathname}ws?canal=1`, { entetes: { Origin: u.origin } });
     const echos = [];
@@ -534,6 +536,9 @@ test('commande libre désactivée : ni créée, ni lancée, ni réactivée, ni e
     const { jeton } = await enroler(a, { hostname: 'poste-sans-cmd' });
     assert.ok(jeton);
     assert.equal((await a.post('/api/automations', { nom: 'Cmd', kind: 'cmd', payload: 'id', cible: 'tous' })).status, 403);
+    const refus = x.db.prepare("SELECT objet, details FROM socle_journal WHERE action = 'acces.refuse' ORDER BY n DESC LIMIT 1").get();
+    assert.equal(refus.objet, '/api/automations', 'refus décidé par Sentinel, journalisé comme ceux du socle');
+    assert.match(refus.details, /SENTINEL_ALLOW_EXEC/);
     // Une automatisation « commande libre » d'avant la désactivation (ou reprise de la 1.x).
     x.db.prepare("INSERT INTO automatisations(ref, nom, kind, payload, cible, toutes_h, heure, actif) VALUES('EEEEEEEEEEEEEEEE', 'Ancienne', 'cmd', 'id', 'tous', 1, 0, 0)").run();
     x.db.prepare("INSERT INTO automatisations(ref, nom, kind, payload, cible, toutes_h, heure, actif) VALUES('FFFFFFFFFFFFFFFF', 'Inventaire', 'inventory', '', 'tous', 1, 0, 1)").run();
