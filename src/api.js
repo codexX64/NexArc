@@ -14,7 +14,7 @@ import { sousReseau, diffusionDirigee, emettre } from './wol.js';
 import { observer, empreinte } from './tls.js';
 import * as redfish from './redfish.js';
 import * as enroll from './enroll.js';
-import { MAX_AUTOMATISATIONS } from './base.js';
+import { MAX_AUTOMATISATIONS, REF } from './base.js';
 
 const NOM_HOTE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$/;
 
@@ -57,6 +57,14 @@ const S = {
   // Site et nom sont contrôlés à part (enroll.controler) : ils entrent dans un script root.
   inscription: { site: { type: 'chaine', max: 60, defaut: 'Agents' }, name: { type: 'chaine', max: 60, defaut: '' }, relay: { type: 'booleen', defaut: false } },
   echange: { code: { type: 'chaine', requis: true, max: 40 } },
+  // Paramètres de requête : un paramètre qu'une route ne déclare pas est refusé.
+  requetePin: { idx: { type: 'entier', min: 0, max: 7, defaut: 0 }, redfish: { type: 'chaine', parmi: ['1'] } },
+  activation: { enabled: { type: 'chaine', requis: true, parmi: ['true', 'false'] } },
+  telechargement: { code: { type: 'chaine', max: 40, defaut: '' } },
+  script: {
+    os: { type: 'chaine', max: 20, defaut: 'linux' }, code: { type: 'chaine', max: 40, defaut: '' },
+    site: { type: 'chaine', max: 60, defaut: 'Agents' }, name: { type: 'chaine', max: 60, defaut: '' }, relais: { type: 'chaine', parmi: ['1'] },
+  },
 };
 
 // Chaque route non publique déclare dans ses options le rôle minimal qu'elle
@@ -233,16 +241,16 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   r.get('/api/machines/:ref/pin', async ctx => {
     session(ctx, { role: 'admin', renfort: true });
     const m = parc.machine(machine(ctx.params.ref));
-    const { host, port } = ciblePinTLS(m, ctx.url.searchParams);
+    const { host, port } = ciblePinTLS(m, ctx.q);
     const vu = await observer(host, port).catch(carteEnEchec('Carte', m));
     return { fp: vu.fp, sujet: vu.sujet };
-  }, { role: 'admin' });
+  }, { role: 'admin', requete: S.requetePin });
   r.post('/api/machines/:ref/pin', async ctx => {
     session(ctx, { role: 'admin', renfort: true });
     const id = machine(ctx.params.ref);
     const m = parc.machine(id);
     const b = await corps(ctx, S.pin);
-    const { host, port, idx, redfish: rf } = ciblePinTLS(m, new URLSearchParams(b.redfish ? { redfish: '1' } : { idx: String(b.idx ?? 0) }));
+    const { host, port, idx, redfish: rf } = ciblePinTLS(m, { idx: b.idx ?? 0, redfish: b.redfish ? '1' : undefined });
     const vu = await observer(host, port).catch(carteEnEchec('Carte', m));
     if (empreinte(vu.fp) !== empreinte(String(b.fp))) throw new ErreurHttp(409, 'L\'empreinte a changé depuis l\'affichage : recommence.');
     if (rf) parc.poserPinRedfish(id, { fp: vu.fp, pem: vu.pem });
@@ -366,13 +374,13 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     session(ctx, { role: 'membre' });
     const a = db.prepare('SELECT id, nom, kind FROM automatisations WHERE ref = ?').get(ctx.params.ref);
     if (!a) throw new ErreurHttp(404, 'Automatisation introuvable.');
-    const actif = ctx.url.searchParams.get('enabled') !== 'false';
+    const actif = ctx.q.enabled === 'true';
     if (actif) commandeLibre(ctx, a.kind);
     else if (a.kind === 'cmd') portail.exiger(ctx, { role: 'admin', renfort: true });
     db.prepare('UPDATE automatisations SET actif = ? WHERE id = ?').run(actif ? 1 : 0, a.id);
     journal.ecrire({ acteur: ctx.session.compte, action: actif ? 'automatisation.activee' : 'automatisation.suspendue', objet: a.nom, ip: ctx.ip, details: { kind: a.kind } });
     return { automations: parc.automatisations() };
-  }, { role: 'membre' });
+  }, { role: 'membre', requete: S.activation });
   r.del('/api/automations/:ref', ctx => {
     session(ctx, { role: 'admin', renfort: true });
     const a = db.prepare('SELECT id, nom, kind FROM automatisations WHERE ref = ?').get(ctx.params.ref);
@@ -436,30 +444,30 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   r.get('/api/enroll/agent.py', ctx => {
     // Une session d'opérateur, ou un code d'inscription encore valide.
-    codeOuSession(ctx);
+    codeOuSession(ctx, ctx.q.code);
     const src = fs.readFileSync(path.join(racine, 'agent', 'sentinel-agent.py'), 'utf8');
     ctx.res.writeHead(200, { 'Content-Type': 'text/x-python; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="sentinel-agent.py"' });
     ctx.res.end(src);
     return undefined;
-  }, { public: true });
+  }, { public: true, requete: S.telechargement });
 
   // Les versions et empreintes des dépendances de l'agent, que pip vérifie.
   r.get('/api/enroll/requirements.txt', ctx => {
-    codeOuSession(ctx);
+    codeOuSession(ctx, ctx.q.code);
     const src = fs.readFileSync(path.join(racine, 'agent', 'requirements.txt'), 'utf8');
     ctx.res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="requirements.txt"' });
     ctx.res.end(src);
     return undefined;
-  }, { public: true });
+  }, { public: true, requete: S.telechargement });
 
   r.get('/api/enroll/script', ctx => {
-    const code = codeOuSession(ctx);
-    const os = ctx.url.searchParams.get('os') || 'linux';
-    if (!Object.hasOwn(enroll.BUILDERS, os)) throw new ErreurHttp(404, 'Système non supporté.');
-    const [builder, fichier, media] = enroll.BUILDERS[os];
-    const site = (ctx.url.searchParams.get('site') || 'Agents').trim() || 'Agents';
-    const nom = (ctx.url.searchParams.get('name') || '').trim();
-    const relais = ctx.url.searchParams.get('relais') === '1';
+    const q = ctx.q;
+    const code = codeOuSession(ctx, q.code);
+    if (!Object.hasOwn(enroll.BUILDERS, q.os)) throw new ErreurHttp(404, 'Système non supporté.');
+    const [builder, fichier, media] = enroll.BUILDERS[q.os];
+    const site = q.site.trim() || 'Agents';
+    const nom = q.name.trim();
+    const relais = q.relais === '1';
     // Une session d'opérateur ouvre cette route sans code valide : le code, le
     // site et le nom sont donc contrôlés ici, avant d'entrer dans le script.
     const refus = enroll.controler(baseUrl(ctx), { code, site, nom });
@@ -468,7 +476,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     ctx.res.writeHead(200, { 'Content-Type': media, 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${fichier}"` });
     ctx.res.end(body);
     return undefined;
-  }, { public: true });
+  }, { public: true, requete: S.script });
 
   // ───────── agent : remontée, relève, résultat (jeton d'agent) ─────────
   r.post('/api/ingest', async ctx => {
@@ -512,8 +520,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }
   // Les fichiers d'inscription s'ouvrent à un opérateur (session membre) ou à
   // qui tient un code encore valide ; rend le code demandé.
-  function codeOuSession(ctx) {
-    const code = ctx.url.searchParams.get('code') || '';
+  function codeOuSession(ctx, code) {
     if (sessionSilencieuse(ctx)) return code;
     controlerEchecs(ctx);
     return agents.codeValide(code) ? code : refuserPreuve(ctx, 'Code d\'inscription invalide ou expiré.');
@@ -524,14 +531,13 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if (cfg.urlEnrolement) return cfg.urlEnrolement.replace(/\/+$/, '');
     return ctx.origine || `http://localhost:${cfg.port}`;
   }
-  function ciblePinTLS(m, params) {
-    if (params.get('redfish') === '1') {
+  function ciblePinTLS(m, { idx, redfish: rf }) {
+    if (rf === '1') {
       const base = parc.redfishBase(m);
       if (!base) throw new ErreurHttp(409, 'Aucune carte Redfish configurée.');
       if (!/^https:/i.test(base)) throw new ErreurHttp(422, REDFISH_HTTPS);
       const u = new URL(base); return { host: u.hostname, port: Number(u.port) || 443, redfish: true };
     }
-    const idx = Math.max(0, Math.min(7, Number(params.get('idx')) || 0));
     const item = consolesEffectives(m)[idx];
     if (!item) throw new ErreurHttp(404, 'Console introuvable.');
     if (item.type === 'vnc') { const h = item.target.slice(0, item.target.lastIndexOf(':')); throw new ErreurHttp(422, `La console VNC ${h} n'utilise pas TLS : rien à épingler.`); }
@@ -563,7 +569,15 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       const t = r.trouver(ctx.req.method, p);
       if (!t) throw new ErreurHttp(404, 'Route inconnue.');
       if (t.methodes) { ctx.res.setHeader('Allow', t.methodes.join(', ')); throw new ErreurHttp(405, 'Méthode non admise.'); }
+      // Chaque référence désignée par le chemin a la forme des références
+      // publiques ; la requête ne porte que les paramètres que la route déclare.
+      if (Object.values(t.params).some(v => !REF.test(v))) throw new ErreurHttp(404, 'Introuvable.');
       ctx.params = t.params;
+      // Validée à la lecture, après l'authentification du gestionnaire : une
+      // requête anonyme reçoit 401, pas le détail de ce qu'elle aurait dû porter.
+      const schema = t.route.options?.requete;
+      if (!schema && ctx.url.search) throw new ErreurHttp(400, 'Paramètres de requête inattendus.');
+      Object.defineProperty(ctx, 'q', { configurable: true, get: () => valider(Object.fromEntries(ctx.url.searchParams), schema) });
       let reponse;
       try { reponse = await t.route.gestionnaire(ctx); } catch (e) {
         if (e instanceof CarteEnEchec) { repondreJson(ctx.res, 502, { error: e.message }); return true; }

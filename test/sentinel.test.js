@@ -190,6 +190,17 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
     'PUT /api/machines/AAAAAAAAAAAAAAAA/consoles', 'PUT /api/machines/AAAAAAAAAAAAAAAA/mesh-node', 'PUT /api/machines/AAAAAAAAAAAAAAAA/redfish']);
   // Aucune console n'est plus servie sous l'origine de Sentinel.
   assert.equal((await membre.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 404);
+  // Paramètres : une référence mal formée ne désigne rien ; un paramètre de
+  // requête non déclaré, ou hors de ses valeurs, est refusé.
+  assert.equal((await membre.get('/api/machines/2/jobs')).status, 404);
+  assert.equal((await membre.post('/api/alerts/..%2F..%2Fetc/ack')).status, 404);
+  assert.equal((await membre.get('/api/state?limit=100000')).status, 400);
+  assert.equal((await anonyme.get('/api/state?limit=100000')).status, 400);
+  const auto = (await membre.post('/api/automations', { nom: 'Paramètres', kind: 'inventory' })).json.automations.find(a => a.nom === 'Paramètres').id;
+  assert.equal((await membre.put(`/api/automations/${auto}?enabled=peut-etre`)).status, 400);
+  assert.equal((await membre.put(`/api/automations/${auto}`)).status, 400, 'l\'état voulu est dit, jamais supposé');
+  assert.equal((await anonyme.put(`/api/automations/${auto}?enabled=peut-etre`)).status, 401, 'l\'authentification passe avant le détail des paramètres');
+  s.parc.db.prepare('DELETE FROM automatisations WHERE ref = ?').run(auto);
 });
 
 test('agent : code d\'inscription à usage unique, remontée, relève et résultat de SES tâches seulement', async () => {
