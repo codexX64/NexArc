@@ -115,7 +115,6 @@ export class Parc {
   machine(id) { return this.db.prepare('SELECT * FROM machines WHERE id = ?').get(id) || null; }
   machineParRef(ref) { const id = this.idDe(ref); return id ? this.machine(id) : null; }
 
-  // ---- consoles : liste publique sans aucun secret ----
   consolesPubliques(items) {
     return (items || []).map(it => {
       const { vncpw_scelle, ...pub } = it;
@@ -204,14 +203,12 @@ export class Parc {
     })).sort((a, b) => (a.crit !== 'Critique') - (b.crit !== 'Critique') || b.c - a.c || a.n.localeCompare(b.n)).slice(0, 400);
   }
 
-  // ---- flux d'activité ----
   pousser(texte, ip = '') {
     this.db.prepare('INSERT INTO flux(texte, ip, cree) VALUES(?,?,?)').run(String(texte).slice(0, 400), ip || null, secondes());
     this.db.prepare('DELETE FROM flux WHERE id NOT IN (SELECT id FROM flux ORDER BY cree DESC LIMIT 60)').run();
     return { html: String(texte).slice(0, 400), ip: ip || '', cree: secondes() };
   }
 
-  // ---- tâches ----
   // La création en refuse au-delà de MAX_AUTOMATISATIONS : la liste reste bornée.
   automatisations() {
     return this.db.prepare('SELECT * FROM automatisations ORDER BY id LIMIT ?').all(MAX_AUTOMATISATIONS).map(a => this.autoPublique(a));
@@ -229,7 +226,6 @@ export class Parc {
     return { id: t.ref, kind: t.kind, payload: t.sensible ? '' : t.payload, status: t.status, output: t.sensible && !admin ? '' : t.output || '', rc: t.rc, cree: t.cree, fin: t.fin, auteur: t.auteur || '' };
   }
 
-  // ---- écriture des consoles, avec scellage des mots de passe VNC ----
   // Scelle tout mot de passe VNC (clé « vncpw » en clair → « vncpw_scelle »),
   // et préserve un mot de passe déjà scellé quand le client ré-enregistre sans
   // le retaper (l'UI ne renvoie jamais le secret). Le pin épinglé est préservé.
@@ -274,7 +270,7 @@ export class Parc {
     return true;
   }
 
-  // ---- Redfish : identifiants scellés, empreinte du certificat épinglée ----
+  // Redfish : identifiants scellés sous SOCLE_CLE, certificat de la carte épinglé.
   poserRedfish(machineId, { url, user, password }) {
     const m = this.machine(machineId);
     if (!m) return false;

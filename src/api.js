@@ -123,10 +123,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   // Corps validé (limite adaptée à l'inventaire d'un agent).
   const corps = async (ctx, schema, gros = false) => valider(await lireCorps(ctx.req, { limite: gros ? 512 * 1024 : 64 * 1024 }), schema);
 
-  // ───────── sonde publique ─────────
   r.get('/api/health', ctx => repondreJson(ctx.res, 200, { ok: true }), { public: true });
 
-  // ───────── état, résumé, collecte ─────────
   r.get('/api/state', ctx => { if (!estHub(ctx)) session(ctx); return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() }; }, { hub: true, role: 'lecture' });
   r.get('/api/summary', ctx => { if (!estHub(ctx)) session(ctx); return parc.resume(); }, { hub: true, role: 'lecture' });
   r.post('/api/collect', ctx => { session(ctx, { role: 'membre' }); for (const l of agents.collecter()) flux.pousser({ t: 'flux', ...l }); return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() }; }, { role: 'membre' });
@@ -140,7 +138,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return undefined; // la réponse reste ouverte
   }, { role: 'lecture' });
 
-  // ───────── alertes ─────────
   // Acquitter : « vu, pris en charge ». L'alerte reste ouverte tant que sa
   // cause dure ; elle se résout d'elle-même quand la mesure redevient bonne.
   r.post('/api/alerts/:ref/ack', ctx => {
@@ -149,7 +146,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
   }, { role: 'membre' });
 
-  // ───────── détail d'une machine : logiciels, tâches ─────────
   r.get('/api/machines/:ref/software', ctx => {
     session(ctx); const m = parc.machine(machine(ctx.params.ref));
     let sw = []; try { sw = m.software ? JSON.parse(m.software) : []; } catch { sw = []; }
@@ -180,7 +176,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ok: true, id: t.ref };
   }, { hub: true, role: 'membre' });
 
-  // ───────── consoles ─────────
   r.get('/api/console-types', ctx => { session(ctx); return { types: typesPublics(meshActif()) }; }, { role: 'lecture' });
 
   // Ouvrir un accès : une passe pour l'origine des consoles, ou un jeton de
@@ -233,7 +228,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
   }, { role: 'admin' });
 
-  // ───────── épinglage TLS (confiance au premier usage, confirmée par l'admin) ─────────
   // GET montre l'empreinte et le sujet ; POST la confirme et l'épingle. Les deux
   // passent par la sonde observer() de tls.js, sans vérification d'autorité, et
   // donc sous ses trois garanties : (1) atteinte seulement ici, par un admin
@@ -261,7 +255,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ok: true, fp: vu.fp };
   }, { role: 'admin' });
 
-  // ───────── Redfish : alimentation ─────────
   r.put('/api/machines/:ref/redfish', async ctx => {
     session(ctx, { role: 'admin', renfort: true }); // identifiants d'appareil
     const id = machine(ctx.params.ref);
@@ -298,7 +291,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ok: true, action: b.action, reset_type: used };
   }, { role: 'membre' });
 
-  // ───────── hôtes sans agent (carte de gestion) ─────────
   r.post('/api/hosts', async ctx => {
     session(ctx, { role: 'admin', renfort: true });
     const b = await corps(ctx, S.hote);
@@ -320,7 +312,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
   }, { role: 'admin' });
 
-  // ───────── réveil réseau ─────────
   r.get('/api/relays', ctx => { session(ctx); return { coverage: couverture() }; }, { role: 'lecture' });
   r.post('/api/machines/:ref/wake', async ctx => {
     const hub = estHub(ctx);
@@ -349,7 +340,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ok: true, mac, methods: methodes };
   }, { hub: true, role: 'membre' });
 
-  // ───────── automatisations ─────────
   r.get('/api/automations', ctx => { session(ctx); return { automations: parc.automatisations() }; }, { role: 'lecture' });
   // Une automatisation « commande libre » est une commande libre répétée : même
   // réglage (SENTINEL_ALLOW_EXEC), même rôle, même renfort, à chaque geste qui
@@ -402,7 +392,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ok: true, queued: n };
   }, { role: 'membre' });
 
-  // ───────── réglages (lecture) ─────────
   r.get('/api/settings', ctx => {
     session(ctx);
     const n = db.prepare("SELECT COUNT(*) n FROM machines WHERE source = 'agent'").get().n;
@@ -413,7 +402,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     };
   }, { role: 'lecture' });
 
-  // ───────── enrôlement ─────────
   // Tirer un code, l'échanger, relever ses tâches : chacun change l'état, donc
   // un POST, jamais un GET qu'un lien ou un préchargement déclencherait.
   r.post('/api/enroll/info', async ctx => {
@@ -481,7 +469,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return undefined;
   }, { public: true, requete: S.script });
 
-  // ───────── agent : remontée, relève, résultat (jeton d'agent) ─────────
   r.post('/api/ingest', async ctx => {
     if (!debitIngest.prendre(ctx.ip)) throw new ErreurHttp(429, 'Trop de remontées.');
     controlerEchecs(ctx);
@@ -507,7 +494,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { ok: true };
   }, { public: true });
 
-  // ───────── helpers ─────────
   // Une carte ne reçoit ses identifiants qu'en HTTPS, sur un certificat épinglé.
   function redfishPret(m) {
     const conf = parc.redfishConf(m);

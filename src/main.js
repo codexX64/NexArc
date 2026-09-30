@@ -114,7 +114,6 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
     } catch (e) { repondreErreur(res, e, { journal: log }); }
   }));
 
-  // ---- mise à niveau WebSocket : pont VNC ----
   serveur.on('upgrade', async (req, socket) => {
     try {
       const url = new URL(req.url, 'http://sentinel');

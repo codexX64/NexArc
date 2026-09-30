@@ -77,7 +77,6 @@ export class Taches {
     return true;
   }
 
-  // ---- automatisations ----
   ciblesDe(row) {
     let q = "SELECT id FROM machines WHERE source = 'agent'";
     const args = [];

@@ -92,7 +92,6 @@ async function aller(k, { ref } = {}) {
   stage.scrollTop = 0;
 }
 
-// ─────────── état partagé ───────────
 async function rafraichir() {
   try { appliquerEtat(await api.get('/api/state')); } catch { /* 401 → porte */ }
 }
@@ -117,7 +116,6 @@ function majCompteur(k) {
   if (b) b.textContent = n; else navs[k].append(h('span', { class: 'cnt', text: String(n) }));
 }
 
-// ─────────── vues ───────────
 function osIcone(k) { return { srv: 'serveur', lin: 'terminal', mac: 'ecran2', hw: 'serveur' }[k] || 'ecran2'; }
 function classeRisque(r) { return r >= 75 ? 'held' : r >= 45 ? 'warn' : ''; }
 function tagEtat(m) {
@@ -267,7 +265,6 @@ async function appliquerCorrectif(pkg) {
   toast(n ? `Mise à jour envoyée sur ${n} poste(s).` : 'Envoi impossible.');
 }
 
-// ─────────── automatisations ───────────
 const AU_KIND = { update: 'Mises à jour', cmd: 'Commande', install: 'Installation', uninstall: 'Désinstallation', inventory: 'Inventaire' };
 async function pageAutos() {
   const liste = h('div', {});
@@ -323,7 +320,6 @@ function boutonNouvelleAuto(peindre) {
   } }, icone('plus', 15), 'Nouvelle automatisation');
 }
 
-// ─────────── réglages ───────────
 async function pageReglages() {
   let s, cov;
   try { s = await api.get('/api/settings'); } catch (e) { return h('div', { class: 'page' }, h('p', { class: 'erreur', text: e.message })); }
@@ -352,7 +348,6 @@ async function pageReglages() {
       peutAgir ? h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'Enrôler un poste' })), h('div', { class: 'cardbody' }, h('p', { class: 'hint mt0', text: 'Un code d\'inscription à usage unique génère la commande d\'installation.' }), h('button', { class: 'btn solid', type: 'button', onclick: () => dialogueInscription(false) }, icone('plus', 15), 'Générer une commande'))) : null));
 }
 
-// ─────────── fiche d'une machine ───────────
 async function pageDetail(ref) {
   const m = E.machines.find(x => x.id === ref);
   if (!m) { setTimeout(() => aller('machines'), 0); return h('div', { class: 'page' }, h('p', { class: 'vide', text: 'Poste introuvable.' })); }
@@ -497,7 +492,6 @@ async function reveiller(m) {
   try { const r = await api.post(`/api/machines/${m.id}/wake`); toast('Réveil envoyé — ' + r.methods.join(', ') + '.'); } catch (e) { toast(e.message, true); }
 }
 
-// ─────────── consoles ───────────
 let TYPES = null;
 async function chargerTypes() { if (!TYPES) { try { TYPES = (await api.get('/api/console-types')).types; } catch { TYPES = []; } } return TYPES; }
 
@@ -649,7 +643,6 @@ async function gererConsoles(m) {
 }
 function typeLabel(t) { return (TYPES || []).find(x => x.id === t)?.label || t; }
 
-// ─────────── inscription ───────────
 async function dialogueInscription(relais) {
   const site = h('input', { class: 'field', maxlength: 40, value: relais ? 'Relais' : 'Agents' });
   const nom = h('input', { class: 'field', maxlength: 60, placeholder: 'Laisser vide = nom réseau de la machine' });
@@ -722,7 +715,6 @@ function detecterOs() {
   return 'linux';
 }
 
-// ─────────── utilitaires ───────────
 function ageDe(cree) {
   if (!cree) return 'jamais';
   const d = Math.max(0, Date.now() / 1000 - cree);
@@ -743,7 +735,6 @@ function dessinerSpark(el, data, couleur) {
     path(`M${pts}`, { fill: 'none', stroke: couleur, 'stroke-width': '1.6' }));
 }
 
-// ─────────── flux d'activité en direct (SSE) ───────────
 let relectureAlerte = null;
 function brancherFlux() {
   const src = new EventSource('/api/activite');
@@ -758,7 +749,6 @@ function brancherFlux() {
   src.onerror = () => { /* EventSource se reconnecte seul */ };
 }
 
-// ─────────── boot ───────────
 await rafraichir();
 brancherFlux();
 setInterval(rafraichir, Math.max(10, E.interval) * 1000);

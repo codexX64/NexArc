@@ -61,7 +61,6 @@ CONFIG_DIR = (os.path.join(os.environ.get('ProgramData', r'C:\ProgramData'), 'Se
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'agent.json')
 
 
-# ───────────────────────── TLS : autorité ou empreinte épinglée ─────────────────────────
 def normaliser_empreinte(texte):
     """'sha256:AA:BB…' → 'aabb…' (64 hexa), ou ValueError : une empreinte mal
     formée ne doit jamais aboutir à une session sans vérification."""
@@ -117,7 +116,6 @@ def session_http(url, pin=None, ca=None):
     return s
 
 
-# ───────────────────────── collecte ─────────────────────────
 def oskind():
     s = platform.system().lower()
     if s == 'windows':
@@ -172,7 +170,6 @@ def run(cmd, timeout=25, env=None):
         return 1, str(e)
 
 
-# ───────────────────────── posture : lue, jamais supposée ─────────────────────────
 # Chaque lecteur rend un état du vocabulaire que le serveur connaît, ou
 # « inconnu » quand l'outil manque ou répond de travers. Les analyseurs sont
 # des fonctions pures, essayées sur des sorties réelles dans test_agent.py.
@@ -496,7 +493,6 @@ def collect_updates():
     return ups[:600]
 
 
-# ───────────────────────── tâches ─────────────────────────
 def pkg_cmd(kind, paquet):
     """Commande gestionnaire de paquets — arguments en liste, paquet validé."""
     if not PAQUET.match(paquet):
@@ -593,7 +589,6 @@ def poll_jobs(sess, base, headers, timeout):
     return inventaire_a_refaire
 
 
-# ───────────────────────── configuration ─────────────────────────
 def lire_config():
     for source in (CONFIG_FILE, os.environ.get('SENTINEL_CONFIG', '')):
         if source and os.path.exists(source):

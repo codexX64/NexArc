@@ -32,7 +32,6 @@ export class Agents {
     this.db.prepare('DELETE FROM jetons_attente WHERE expire < ?').run(t);
   }
 
-  // ---- codes d'inscription ----
   nouveauCode({ site = 'Agents', nom = '', relais = false }) {
     this.purger();
     const code = crypto.randomBytes(16).toString('base64url');
@@ -107,7 +106,6 @@ export class Agents {
     return !!(r?.id || r?.attente?.expire >= secondes());
   }
 
-  // ---- remontée d'un agent (inventaire, logiciels, mises à jour) ----
   // Une remontée écrit la machine, son inventaire et ses alertes : tout ou rien.
   ingest(jeton, body) {
     return transaction(this.db, () => this.remonter(jeton, body));
