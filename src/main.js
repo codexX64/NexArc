@@ -4,7 +4,6 @@
 // son adresse est posée, l'origine à part des consoles web.
 import http from 'node:http';
 import path from 'node:path';
-import fs from 'node:fs';
 import { lireConfigSentinel, VERSION } from './config.js';
 import { ouvrirBase, Parc } from './base.js';
 import { Agents } from './agents.js';

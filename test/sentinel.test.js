@@ -17,7 +17,7 @@ import { lookupGarde, hoteInterdit } from '../src/reseau.js';
 import { pont } from '../src/vncbridge.js';
 import { observer, agentEpingle } from '../src/tls.js';
 import { connecter, Connexion } from '../src/websocket.js';
-import { paquetMagique, emettre, diffusionDirigee, sousReseau } from '../src/wol.js';
+import { emettre, diffusionDirigee, sousReseau } from '../src/wol.js';
 import { urlBureau, nodeValide } from '../src/mesh.js';
 import https from 'node:https';
 
