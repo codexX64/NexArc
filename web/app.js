@@ -351,7 +351,7 @@ async function pageReglages() {
 async function pageDetail(ref) {
   const m = E.machines.find(x => x.id === ref);
   if (!m) { setTimeout(() => aller('machines'), 0); return h('div', { class: 'page' }, h('p', { class: 'vide', text: 'Poste introuvable.' })); }
-  const spark = (id, data, couleur) => h('svg', { class: 'spark', id, viewBox: '0 0 260 38', preserveAspectRatio: 'none' });
+  const spark = id => h('svg', { class: 'spark', id, viewBox: '0 0 260 38', preserveAspectRatio: 'none' });
   const cpuS = spark('s-cpu'), ramS = spark('s-ram'), diskS = spark('s-disk');
   const kv = (k, v) => h('div', { class: 'kv' }, h('span', { class: 'k', text: k }), h('span', { class: 'v', text: v }));
   const isAgent = m.source === 'agent';
@@ -634,9 +634,9 @@ async function gererConsoles(m) {
       h('div', { class: 'row2' }, typeSel, label), cible, vncpw, h('label', { class: 'chk mt9' }, embed, h('span', { text: 'Afficher dans Sentinel (sinon : nouvel onglet)' })), hint,
       h('div', { class: 'pad pt10' }, h('button', { class: 'btn solid plein', type: 'button', text: 'Ajouter l\'accès', onclick: async () => {
         const t = cible.value.trim(); if (!t) { err.textContent = 'Renseigne l\'URL ou le node.'; return; }
-        const it = { type: typeSel.value, target: t, label: label.value.trim(), embed: embed.checked };
-        if (typeSel.value === 'vnc' && vncpw.value) it.vncpw = vncpw.value;
-        cons.push(it);
+        const acces = { type: typeSel.value, target: t, label: label.value.trim(), embed: embed.checked };
+        if (typeSel.value === 'vnc' && vncpw.value) acces.vncpw = vncpw.value;
+        cons.push(acces);
         if (await sauverConsoles()) { cible.value = ''; label.value = ''; vncpw.value = ''; toast('Accès ajouté.'); } else cons.pop();
       } }))), blocRedfish(m), err],
     boutons: [{ texte: 'Fermer', classe: 'solid', valeur: true }] });
@@ -727,10 +727,10 @@ function ageDe(cree) {
   return `il y a ${Math.round(d / 86400)} j`;
 }
 const SVGNS = 'http://www.w3.org/2000/svg';
-function dessinerSpark(el, data, couleur) {
-  if (!data.length) return;
-  const W = 260, H = 38, max = Math.max(...data, 100);
-  const pts = data.map((v, i) => `${i * (W / Math.max(1, data.length - 1))} ${H - (v / max) * (H - 4) - 2}`).join(' L');
+function dessinerSpark(el, valeurs, couleur) {
+  if (!valeurs.length) return;
+  const W = 260, H = 38, max = Math.max(...valeurs, 100);
+  const pts = valeurs.map((v, i) => `${i * (W / Math.max(1, valeurs.length - 1))} ${H - (v / max) * (H - 4) - 2}`).join(' L');
   const path = (d, attrs) => { const p = document.createElementNS(SVGNS, 'path'); p.setAttribute('d', d); for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v); return p; };
   el.replaceChildren(
     path(`M${pts} L${W} ${H} L0 ${H}Z`, { fill: couleur, opacity: '0.12' }),
