@@ -28,11 +28,12 @@ jobs:
       - name: Essais
         run: npm test
       # L'agent : vérification TLS sur ses deux chemins, lecture de la posture.
-      # Python du système, dans un environnement virtuel ; versions fixées.
+      # Python du système, dans un environnement virtuel ; les dépendances que
+      # reçoivent les postes, vérifiées par leurs empreintes.
       - name: Essais de l'agent
         run: |
           python3 -m venv "$RUNNER_TEMP/agent"
-          "$RUNNER_TEMP/agent/bin/pip" install --quiet psutil==7.2.2 requests==2.33.1
+          "$RUNNER_TEMP/agent/bin/pip" install --quiet --require-hashes --prefer-binary -r agent/requirements.txt
           "$RUNNER_TEMP/agent/bin/python" -m unittest agent/test_agent.py -v
       - name: Essais du socle embarqué
         working-directory: socle

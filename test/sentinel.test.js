@@ -179,7 +179,7 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
   // Les seules routes sans session : la sonde de santé, et ce qu'un agent
   // appelle avec son code d'inscription ou son jeton (vérifiés dans la route).
   const publiques = s.api.routeur.routes.filter(r => r.options?.public).map(r => `${r.methode} ${cheminDe(r)}`).sort();
-  assert.deepEqual(publiques, ['GET /api/enroll/agent.py', 'GET /api/enroll/script', 'GET /api/health',
+  assert.deepEqual(publiques, ['GET /api/enroll/agent.py', 'GET /api/enroll/requirements.txt', 'GET /api/enroll/script', 'GET /api/health',
     'POST /api/agent/jobs', 'POST /api/agent/jobs/AAAAAAAAAAAAAAAA/result', 'POST /api/enroll/config', 'POST /api/ingest']);
   // Aucun GET ne change l'état : tirer un code, l'échanger et relever ses tâches sont des POST.
   for (const chemin of ['/api/enroll/info', '/api/enroll/config', '/api/agent/jobs']) assert.equal((await membre.get(chemin)).status, 405, `GET ${chemin}`);
@@ -899,17 +899,24 @@ test('inscription : scripts Windows (Python + venv), Linux et macOS ; valeurs pi
   assert.equal(w.status, 200);
   assert.match(w.entetes['content-disposition'], /installer-sentinel\.ps1/);
   for (const attendu of [`$Code = '${info.code}'`, "$Site = 'Prod'", "$Nom = 'serveur-a'", 'function Find-Python', '*WindowsApps*', 'Python.Python.3.12',
-    '-m venv "$Dir\\venv"', 'pip install -q --upgrade pip psutil requests', 'sentinel-agent.py" --enroller', '$LASTEXITCODE -ne 0']) {
+    '-m venv "$Dir\\venv"', 'requirements.txt?code=$Code', 'pip install -q --require-hashes --prefer-binary -r "$Dir\\requirements.txt"', 'sentinel-agent.py" --enroller', '$LASTEXITCODE -ne 0']) {
     assert.ok(w.texte.includes(attendu), `script Windows : ${attendu}`);
   }
   for (const systeme of ['linux', 'macos']) {
     const r = await anon.get(`/api/enroll/script?os=${systeme}&code=${info.code}&site=Prod&name=serveur-a`);
     assert.equal(r.status, 200);
     assert.ok(r.texte.includes('-m venv') && r.texte.includes('--enroller'));
+    assert.ok(r.texte.includes('pip" install -q --require-hashes --prefer-binary -r "$DIR/requirements.txt"'), `${systeme} : dépendances vérifiées par empreinte`);
+    assert.doesNotMatch(r.texte, /--upgrade/, `${systeme} : aucune version tirée au hasard`);
     const f = path.join(fs.mkdtempSync(path.join(base, 'script-')), 'installer.sh');
     fs.writeFileSync(f, r.texte);
     execFileSync('bash', ['-n', f]);   // syntaxe bash valide
   }
+  const exigences = await anon.get(`/api/enroll/requirements.txt?code=${info.code}`);
+  assert.equal(exigences.status, 200);
+  assert.equal(exigences.texte, fs.readFileSync(path.join(import.meta.dirname, '..', 'agent', 'requirements.txt'), 'utf8'));
+  const paquets = exigences.texte.split(/(?<!\\)\n/).filter(l => /^[a-z]/.test(l));
+  assert.ok(paquets.length >= 6 && paquets.every(l => /^[a-z0-9-]+==[0-9.]+( ; [^\\]+)? \\\n(\s+--hash=sha256:[0-9a-f]{64}( \\\n)?)+$/.test(l)), 'chaque dépendance : une version exacte et ses empreintes');
   assert.equal((await anon.post('/api/enroll/config', { code: info.code })).status, 200, 'télécharger les scripts ne consomme pas le code');
   // Rien de ce qui entre dans un script root ne peut en sortir.
   const avant = s.parc.db.prepare('SELECT COUNT(*) n FROM enrolements').get().n;

@@ -200,6 +200,11 @@ avec sa configuration en `0600`, et se pose en service.
   `psutil` et `requests`, puis enrôle l'agent. C'est le chemin de la 1.1.0 ; le
   binaire autonome PyInstaller n'existe plus.
 
+Sur chaque système, les dépendances de l'agent s'installent aux versions de
+`agent/requirements.txt`, servi avec le code d'inscription : chaque paquet est
+vérifié par son empreinte SHA-256 avant d'être installé (`pip install
+--require-hashes`), jamais « la dernière version publiée ».
+
 Le site et le nom saisis sont contrôlés (lettres, chiffres, espace, point,
 tiret, parenthèses) avant d'entrer dans un script exécuté en root ou SYSTEM.
 

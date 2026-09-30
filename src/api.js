@@ -442,6 +442,15 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return undefined;
   }, { public: true });
 
+  // Les versions et empreintes des dépendances de l'agent, que pip vérifie.
+  r.get('/api/enroll/requirements.txt', ctx => {
+    codeOuSession(ctx);
+    const src = fs.readFileSync(path.join(racine, 'agent', 'requirements.txt'), 'utf8');
+    ctx.res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="requirements.txt"' });
+    ctx.res.end(src);
+    return undefined;
+  }, { public: true });
+
   r.get('/api/enroll/script', ctx => {
     const code = codeOuSession(ctx);
     const os = ctx.url.searchParams.get('os') || 'linux';

@@ -40,8 +40,10 @@ elif command -v dnf >/dev/null; then dnf install -y -q python3 curl
 elif command -v pacman >/dev/null; then pacman -Sy --noconfirm python curl; fi
 mkdir -p "$DIR"; chmod 700 "$DIR"
 curl -fsSL "$URL/api/enroll/agent.py?code=$CODE" -o "$DIR/sentinel-agent.py"
+curl -fsSL "$URL/api/enroll/requirements.txt?code=$CODE" -o "$DIR/requirements.txt"
 python3 -m venv "$DIR/venv"
-"$DIR/venv/bin/pip" install -q --upgrade pip psutil requests
+# Versions fixées, chaque paquet vérifié par son empreinte avant installation.
+"$DIR/venv/bin/pip" install -q --require-hashes --prefer-binary -r "$DIR/requirements.txt"
 # L'agent échange le code, range son jeton en 0600, s'installe en service.
 SENTINEL_URL="$URL" SENTINEL_ENROLL_CODE="$CODE" SENTINEL_SITE="$SITE" SENTINEL_NAME="$NOM" SENTINEL_RELAY="$RELAIS" \\
   "$DIR/venv/bin/python" "$DIR/sentinel-agent.py" --enroller
@@ -59,8 +61,10 @@ DIR=/usr/local/sentinel-agent
 command -v python3 >/dev/null || { echo "python3 requis (xcode-select --install)"; exit 1; }
 mkdir -p "$DIR"; chmod 700 "$DIR"
 curl -fsSL "$URL/api/enroll/agent.py?code=$CODE" -o "$DIR/sentinel-agent.py"
+curl -fsSL "$URL/api/enroll/requirements.txt?code=$CODE" -o "$DIR/requirements.txt"
 python3 -m venv "$DIR/venv"
-"$DIR/venv/bin/pip" install -q --upgrade pip psutil requests
+# Versions fixées, chaque paquet vérifié par son empreinte avant installation.
+"$DIR/venv/bin/pip" install -q --require-hashes --prefer-binary -r "$DIR/requirements.txt"
 SENTINEL_URL="$URL" SENTINEL_ENROLL_CODE="$CODE" SENTINEL_SITE="$SITE" SENTINEL_NAME="$NOM" SENTINEL_RELAY="$RELAIS" \\
   "$DIR/venv/bin/python" "$DIR/sentinel-agent.py" --enroller
 echo "✓ Terminé — le poste doit apparaître dans la console sous une minute."
@@ -109,9 +113,11 @@ Unregister-ScheduledTask -TaskName "SentinelAgent" -Confirm:$false -ErrorAction 
 Write-Host "-> Agent dans $Dir"
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null
 Invoke-WebRequest -Uri "$Url/api/enroll/agent.py?code=$Code" -OutFile "$Dir\\sentinel-agent.py" -UseBasicParsing
+Invoke-WebRequest -Uri "$Url/api/enroll/requirements.txt?code=$Code" -OutFile "$Dir\\requirements.txt" -UseBasicParsing
 & $Py @PyArgs -m venv "$Dir\\venv"
 if ($LASTEXITCODE -ne 0) { Write-Error "Environnement virtuel non créé."; exit 1 }
-& "$Dir\\venv\\Scripts\\python.exe" -m pip install -q --upgrade pip psutil requests
+# Versions fixées, chaque paquet vérifié par son empreinte avant installation.
+& "$Dir\\venv\\Scripts\\python.exe" -m pip install -q --require-hashes --prefer-binary -r "$Dir\\requirements.txt"
 if ($LASTEXITCODE -ne 0) { Write-Error "Dépendances de l'agent non installées."; exit 1 }
 Write-Host "-> Inscription et tâche planifiée"
 $env:SENTINEL_URL = $Url; $env:SENTINEL_ENROLL_CODE = $Code; $env:SENTINEL_SITE = $Site; $env:SENTINEL_NAME = $Nom; $env:SENTINEL_RELAY = $Relais
