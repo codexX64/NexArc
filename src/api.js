@@ -67,10 +67,6 @@ const S = {
   },
 };
 
-// Chaque route non publique déclare dans ses options le rôle minimal qu'elle
-// exige (lecture, membre, admin). La déclaration ne remplace pas le contrôle,
-// fait dans le gestionnaire : l'essai « autorisation » balaie toutes les routes
-// et vérifie que l'un et l'autre concordent.
 // Une carte en échec : l'opérateur lit une cause courte et une référence ; le
 // détail (adresse, message réseau, réponse brute de la carte) ne va qu'au
 // journal du serveur, sous la même référence. Ce n'est pas une erreur interne
@@ -85,6 +81,10 @@ function causeCarte(e) {
   return 'injoignable';
 }
 
+// Chaque route non publique déclare dans ses options le rôle minimal qu'elle
+// exige (lecture, membre, admin). La déclaration ne remplace pas le contrôle,
+// fait dans le gestionnaire : l'essai « autorisation » balaie toutes les routes
+// et vérifie que l'un et l'autre concordent.
 export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine, consoles, log = console }) {
   const r = new Routeur();
   const { portail, journal, limiteur } = socle;
