@@ -85,7 +85,8 @@ connexion pour un nom d'hôte (la résolution DNS est vérifiée).
 
 **Jetons d'agents.** Un jeton par agent, gardé seulement sous forme d'empreinte
 et comparé en temps constant. Le jeton en clair n'apparaît qu'une fois, à
-l'inscription. Il n'existe pas de jeton d'agent global.
+l'inscription. Il n'existe pas de jeton d'agent global. Un jeton se révoque
+sans perdre la machine (voir « Agents »).
 
 Les clés d'accès n'existent que sur une page HTTPS. Sans HTTPS, `SOCLE_HTTP=1`
 ouvre un mode dégradé, affiché comme tel partout : réservé à un réseau de
@@ -212,6 +213,18 @@ L'agent (`agent/sentinel-agent.py`, Python 3, `psutil` et `requests`) :
 - n'exécute qu'une liste fermée de types de tâches, identique à celle du serveur,
   sans shell interpolé, avec des délais et une sortie bornés ;
 - ne relève et ne rend que les tâches de sa propre machine.
+
+Révoquer un jeton — poste perdu, jeton exposé, incident :
+
+```bash
+docker exec <sentinel> node src/cli.js agents lister
+docker exec <sentinel> node src/cli.js agents revoquer <hôte>    # ou --tous
+```
+
+Le jeton cesse aussitôt ; les tâches encore dues de ce poste sont abandonnées ;
+la machine garde son historique et ses accès. L'agent se réinscrit avec un
+nouveau code et retrouve sa machine par son nom d'hôte. Chaque révocation est
+inscrite au journal de sécurité.
 
 ## Consoles et cartes de gestion
 

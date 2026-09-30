@@ -91,6 +91,14 @@ export function ouvrirBase(dossier) {
 
 const echappeLike = s => s.replace(/[\\%_]/g, c => '\\' + c);
 
+// Plusieurs écritures qui vont ensemble : toutes ou aucune. Appelée au sein
+// d'une transaction déjà ouverte, elle en fait partie.
+export function transaction(db, fn) {
+  if (db.isTransaction) return fn();
+  db.exec('BEGIN IMMEDIATE');
+  try { const r = fn(); db.exec('COMMIT'); return r; } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+
 export class Parc {
   constructor(db, { coffre, horsLigneApres = 120 }) {
     this.db = db; this.coffre = coffre; this.horsLigneApres = horsLigneApres;

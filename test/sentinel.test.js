@@ -10,7 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { demarrer } from '../src/main.js';
 import { Client } from '../socle/essai/client.js';
 import { adminComplet, membreInvite, MDP_ESSAI } from '../socle/essai/inscription.js';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fauxSynapse, fauxRfb, fauxCarte, fauxWs, captureUdp, fauxRedfish, fauxTlsCompteur } from './faux.js';
 import { Coffre } from '../socle/src/chiffre.js';
 import { lookupGarde, hoteInterdit } from '../src/reseau.js';
@@ -221,6 +221,30 @@ test('agent : code d\'inscription à usage unique, remontée, relève et résult
   assert.equal((await membre.req('POST', `/api/agent/jobs/${t.json.id}/result`, { output: 'ok', rc: 0 }, { entetes: { 'x-agent-token': jeton } })).status, 200);
   // jeton d'agent invalide refusé
   assert.equal((await membre.req('POST', '/api/ingest', { hostname: 'x', oskind: 'lin', cpu: 0, ram: 0, disk: 0 }, { entetes: { 'x-agent-token': 'sag_faux' }, origine: null })).status, 401);
+});
+
+// La ligne de commande d'administration, lancée comme dans le conteneur, sur
+// la base de l'instance qui tourne.
+const CLI = path.join(import.meta.dirname, '..', 'src', 'cli.js');
+const cli = (args, { dossier = s.cfg.donnees, entree } = {}) => spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', CLI, ...args],
+  { env: { PATH: process.env.PATH, DATA_DIR: dossier }, input: entree, ...(entree === undefined ? { encoding: 'utf8' } : {}) });
+
+test('révocation d\'un jeton d\'agent : aussitôt refusé, tâches dues abandonnées, la machine retrouvée à la réinscription', async () => {
+  const { jeton } = await enroler(membre, { hostname: 'poste-revoque' });
+  const mref = refMachineParHote('poste-revoque');
+  const t = await membre.post(`/api/machines/${mref}/jobs`, { kind: 'install', payload: 'htop' });
+  assert.equal(t.status, 200);
+  const r = cli(['agents', 'revoquer', 'poste-revoque']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /poste-revoque : jeton révoqué, 1 tâche\(s\) abandonnée\(s\)/);
+  const remonter = j => membre.req('POST', '/api/ingest', { hostname: 'poste-revoque', oskind: 'lin', cpu: 1, ram: 1, disk: 1 }, { entetes: { 'x-agent-token': j }, origine: null });
+  assert.equal((await remonter(jeton)).status, 401, 'le jeton révoqué ne vaut plus rien');
+  assert.equal(s.parc.db.prepare('SELECT status FROM taches WHERE ref = ?').get(t.json.id).status, 'echec', 'la tâche due ne partira pas');
+  assert.equal(s.parc.db.prepare("SELECT COUNT(*) n FROM socle_journal WHERE action = 'agent.jeton_revoque' AND objet = 'poste-revoque'").get().n, 1);
+  assert.equal(cli(['agents', 'revoquer', 'poste-revoque']).status, 1, 'plus rien à révoquer');
+  const { ingest } = await enroler(membre, { hostname: 'poste-revoque' });
+  assert.equal(ingest.status, 200);
+  assert.equal(refMachineParHote('poste-revoque'), mref, 'réinscrit, l\'agent retrouve sa machine');
 });
 
 test('tâches : charge validée selon le type, réveil réservé à sa route (opérateur, automatisation ou Hub)', async () => {

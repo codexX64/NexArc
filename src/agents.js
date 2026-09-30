@@ -9,7 +9,7 @@
 // démesurée, ni texte sans fin.
 import crypto from 'node:crypto';
 import { sha256hex } from '../socle/src/index.js';
-import { nouvelleRef, secondes } from './base.js';
+import { nouvelleRef, secondes, transaction } from './base.js';
 import { normaliserMac } from './wol.js';
 import { suiviCorrectifs } from './alertes.js';
 
@@ -73,6 +73,29 @@ export class Agents {
     const attente = this.db.prepare('SELECT * FROM jetons_attente WHERE jeton_hash = ?').get(h);
     if (!attente || attente.expire < secondes()) { if (attente) this.db.prepare('DELETE FROM jetons_attente WHERE jeton_hash = ?').run(h); return { attente }; }
     return { attente };
+  }
+
+  // Révocation (ligne de commande, runbook d'incident) : le jeton d'un poste,
+  // ou de tout le parc, cesse aussitôt. La machine garde son historique et ses
+  // accès ; l'agent se réinscrit avec un nouveau code et la retrouve par son
+  // nom d'hôte. Ses tâches encore dues sont abandonnées : elles ne partiront
+  // pas vers le prochain détenteur d'un code qui porterait ce nom.
+  revoquer({ hote = null, tous = false } = {}) {
+    return transaction(this.db, () => {
+      const machines = tous
+        ? this.db.prepare("SELECT id, host FROM machines WHERE source = 'agent' AND jeton_hash IS NOT NULL ORDER BY host").all()
+        : this.db.prepare("SELECT id, host FROM machines WHERE source = 'agent' AND jeton_hash IS NOT NULL AND host = ?").all(hote);
+      const t = secondes();
+      const bilan = machines.map(m => {
+        this.db.prepare('UPDATE machines SET jeton_hash = NULL WHERE id = ?').run(m.id);
+        const taches = this.db.prepare("UPDATE taches SET status = 'echec', output = 'Jeton de l''agent révoqué : tâche abandonnée.', fin = ? WHERE machine_id = ? AND status IN ('attente', 'cours')").run(t, m.id).changes;
+        return { host: m.host, taches: Number(taches) };
+      });
+      // Un jeton tiré mais pas encore présenté n'a pas de machine : tout le parc
+      // révoqué, il tombe aussi.
+      const attente = tous ? Number(this.db.prepare('DELETE FROM jetons_attente').run().changes) : 0;
+      return { machines: bilan, attente };
+    });
   }
 
   // ---- remontée d'un agent (inventaire, logiciels, mises à jour) ----
