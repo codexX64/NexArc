@@ -781,6 +781,30 @@ test('migration 1.1.0 : comptes, machines, automatisations reprises ; l\'agent s
   } finally { await v1.arreter(); }
 });
 
+test('migration 1.1.0 : l\'opérateur resté au mot de passe d\'amorçage reçoit au journal un lien qui lui rend l\'accès', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-v1-'));
+  const db = new DatabaseSync(path.join(dossier, 'sentinel.db'));
+  db.exec('CREATE TABLE auth(id INTEGER PRIMARY KEY CHECK(id=1), username TEXT, pw_hash TEXT, totp_secret TEXT, pending_secret TEXT, must_change INTEGER DEFAULT 1, tfa_enabled INTEGER DEFAULT 0)');
+  db.prepare('INSERT INTO auth(id, username, pw_hash) VALUES(1, ?, ?)').run('operateur', 'scrypt$00$00');
+  db.close();
+  const avertis = [];
+  const log = { ...SILENCE, warn: m => avertis.push(String(m)) };
+  const base = { PORT: '0', HOTE: '127.0.0.1', DATA_DIR: dossier, SENTINEL_HUB_TOKEN: JETON_HUB, SOCLE_CLE: crypto.randomBytes(32).toString('base64'), SYNAPSE_URL: syn.url, SYNAPSE_JETON: JETON_SYNAPSE };
+  let x = await demarrer(base, { log });
+  try {
+    const lien = avertis.find(m => m.includes('#reinit='));
+    assert.ok(lien, 'lien de secours écrit au journal');
+    const c = new Client(x.serveur.address().port);
+    const r = await c.post('/api/compte/jeton', { usage: 'reinit', jeton: /#reinit=([\w-]+)/.exec(lien)[1], motDePasse: 'phrase de passe neuve pour sentinel' });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.etape, 'connexion');
+  } finally { await x.arreter(); }
+  // L'administrateur tient un mot de passe : le démarrage suivant n'écrit plus de lien.
+  avertis.length = 0;
+  x = await demarrer(base, { log });
+  try { assert.ok(!avertis.some(m => m.includes('#reinit=')), 'aucun lien une fois l\'accès rendu'); } finally { await x.arreter(); }
+});
+
 test('base des premières 2.0 : codes d\'inscription en clair écartés, table reprise sous sa forme hachée', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-codes-'));
   const db = new DatabaseSync(path.join(dossier, 'sentinel.db'));

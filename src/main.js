@@ -10,7 +10,7 @@ import { Agents } from './agents.js';
 import { Alertes } from './alertes.js';
 import { Taches } from './taches.js';
 import { Synapse } from './synapse.js';
-import { migrerComptes, migrerParc } from './migration.js';
+import { lienDeSecours, migrerComptes, migrerParc } from './migration.js';
 import { creerApi } from './api.js';
 import { pont } from './vncbridge.js';
 import { OrigineConsoles } from './origine-consoles.js';
@@ -55,6 +55,7 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
     migrer: ({ comptes, coffre }) => migrerComptes({ db, comptes, coffre, log }),
   });
   migrerParc({ db, log });
+  lienDeSecours({ db, comptes: socle.comptes, journal: socle.journal, urlPublique: socle.cfg.urlPublique, log });
 
   const parc = new Parc(db, { coffre: socle.coffre, horsLigneApres: cfg.horsLigneApres });
   let rescelles;

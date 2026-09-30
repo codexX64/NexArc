@@ -185,9 +185,11 @@ puis retire les tables de l'ancienne version.
   du socle. L'empreinte scrypt de son mot de passe est relue telle quelle (le
   socle la reconnaît et la repasse en Argon2id à la connexion suivante). **Si
   cette empreinte est absente ou illisible — ou si la 1.x attendait un mot de
-  passe d'amorçage — le compte est repris sans mot de passe, et un administrateur
-  lui envoie un lien de réinitialisation depuis la page Comptes.** Le secret
-  TOTP, gardé en clair par la 1.x, est scellé à la reprise.
+  passe d'amorçage — le compte est repris sans mot de passe. Tant qu'aucun
+  administrateur ne peut se connecter, chaque démarrage écrit dans les journaux
+  un lien de réinitialisation valable vingt minutes (bouton Journaux du Hub, ou
+  `docker logs` ; redémarrer en donne un neuf).** Le secret TOTP, gardé en clair par la 1.x, est scellé à la
+  reprise.
 - **Le parc, les alertes, les automatisations et l'historique** sont importés.
   Le contenu des commandes libres passées n'est pas conservé. Une alerte de la
   1.x n'a pas de règle de 2.0 qui la résoudrait : elle se ferme à

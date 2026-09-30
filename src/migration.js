@@ -40,6 +40,23 @@ export function migrerComptes({ db, comptes, coffre, log = console }) {
   return 1;
 }
 
+// L'opérateur repris sans mot de passe ne peut pas se connecter, et il n'y a
+// pas d'autre administrateur pour lui envoyer un lien. Tant qu'aucun
+// administrateur actif ne tient un mot de passe ou une clé d'accès, chaque
+// démarrage écrit au journal du conteneur un lien de réinitialisation neuf,
+// comme le jeton d'installation d'une base vide.
+const SECOURS_MS = 20 * 60e3;
+export function lienDeSecours({ db, comptes, journal, urlPublique = '', log = console }) {
+  const admins = db.prepare("SELECT * FROM socle_comptes WHERE role = 'admin' AND actif = 1 ORDER BY cree").all();
+  if (!admins.length || admins.some(c => { const f = comptes.facteursDe(c); return f.motdepasse || f.cle; })) return null;
+  const c = admins[0];
+  db.prepare("DELETE FROM socle_jetons WHERE compte = ? AND usage = 'reinit'").run(c.id);
+  const jeton = comptes.emettreJeton('reinit', c.id, SECOURS_MS);
+  journal.ecrire({ acteur: 'système', action: 'compte.reinit_emis', objet: c.id, details: { par: 'démarrage, aucun administrateur ne peut se connecter' } });
+  log.warn?.(`[comptes] Aucun administrateur ne peut se connecter. Lien de réinitialisation pour « ${c.identifiant} », valable vingt minutes et une seule fois : ${urlPublique || '<adresse de Sentinel>'}/#reinit=${jeton}`);
+  return jeton;
+}
+
 // Appelée après demarrerSocle : importe le parc et son historique, puis retire
 // les tables de la 1.x.
 export function migrerParc({ db, log = console }) {
