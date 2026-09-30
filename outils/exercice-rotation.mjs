@@ -69,7 +69,7 @@ async function vncOuvre(client, ref) {
 }
 const alimentationLue = async (client, ref) => (await client.get(`/api/machines/${ref}/power`)).json?.power === 'On';
 const agentRemonte = async jeton => (await new Client(PORT).req('POST', '/api/ingest', { hostname: 'serveur-a', ip: '198.51.100.12', oskind: 'lin', cpu: 3, ram: 20, disk: 30, av: 'à jour', fw: 'actif', enc: 'LUKS actif' }, { entetes: { 'x-agent-token': jeton }, origine: null })).status === 200
-  && (await new Client(PORT).req('GET', '/api/agent/jobs', undefined, { entetes: { 'x-agent-token': jeton }, origine: null })).status === 200;
+  && (await new Client(PORT).req('POST', '/api/agent/jobs', {}, { entetes: { 'x-agent-token': jeton }, origine: null })).status === 200;
 
 await note((await demarrer()).code === null, 'démarrage sous la SOCLE_CLE initiale (lue dans un fichier)');
 const a = new Client(PORT), auth = new Authentificateur();
@@ -79,8 +79,8 @@ await note((await a.post('/api/compte/totp/confirmer', { code: totp.code(secret,
 const o = await a.post('/api/compte/cles/options');
 await note((await a.post('/api/compte/cles', { reponse: auth.creer(o.json, a.origine), nom: 'Exercice' })).json?.niveau === 'complet', 'clé d’accès inscrite');
 const codes = (await a.post('/api/compte/secours')).json.codes;
-const info = (await a.get('/api/enroll/info?site=Exercice')).json;
-const jetonAgent = (await new Client(PORT).get(`/api/enroll/config?code=${info.code}`)).json?.token;
+const info = (await a.post('/api/enroll/info', { site: 'Exercice' })).json;
+const jetonAgent = (await new Client(PORT).post('/api/enroll/config', { code: info.code }, { origine: null })).json?.token;
 await note(!!jetonAgent && await agentRemonte(jetonAgent), 'agent enrôlé : son jeton remonte et relève ses tâches');
 const ref = (await a.get('/api/state')).json.machines.find(m => m.host === 'serveur-a')?.id;
 await note((await a.put(`/api/machines/${ref}/consoles`, { consoles: [{ type: 'vnc', target: `127.0.0.1:${rfb.port}`, label: 'KVM', vncpw: 'vnc-de-l-exercice' }] })).status === 200, 'mot de passe VNC enregistré (scellé)');

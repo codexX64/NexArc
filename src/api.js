@@ -46,6 +46,9 @@ const S = {
   },
   pin: { idx: { type: 'entier', min: 0, max: 7 }, redfish: { type: 'booleen', defaut: false }, fp: { type: 'chaine', requis: true, max: 100 } },
   acces: { idx: { type: 'entier', min: 0, max: 7, defaut: 0 } },
+  // Site et nom sont contrôlés à part (enroll.controler) : ils entrent dans un script root.
+  inscription: { site: { type: 'chaine', max: 60, defaut: 'Agents' }, name: { type: 'chaine', max: 60, defaut: '' }, relay: { type: 'booleen', defaut: false } },
+  echange: { code: { type: 'chaine', requis: true, max: 40 } },
 };
 
 // Chaque route non publique déclare dans ses options le rôle minimal qu'elle
@@ -374,12 +377,15 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }, { role: 'lecture' });
 
   // ───────── enrôlement ─────────
-  r.get('/api/enroll/info', ctx => {
+  // Tirer un code, l'échanger, relever ses tâches : chacun change l'état, donc
+  // un POST, jamais un GET qu'un lien ou un préchargement déclencherait.
+  r.post('/api/enroll/info', async ctx => {
     session(ctx, { role: 'membre' });
+    const b = await corps(ctx, S.inscription);
     const base = baseUrl(ctx);
-    const site = (ctx.url.searchParams.get('site') || 'Agents').trim() || 'Agents';
-    const nom = (ctx.url.searchParams.get('name') || '').trim();
-    const relais = ctx.url.searchParams.get('relay') === '1' || ctx.url.searchParams.get('relais') === '1';
+    const site = b.site.trim() || 'Agents';
+    const nom = b.name.trim();
+    const relais = b.relay;
     // Contrôlé avant de créer le code : ces valeurs finiront dans un script root.
     const refus = enroll.controler(base, { site, nom });
     if (refus) throw new ErreurHttp(422, refus);
@@ -394,13 +400,13 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }, { role: 'membre' });
 
   // Échange du code contre le jeton d'agent (par l'agent lui-même).
-  r.get('/api/enroll/config', ctx => {
+  r.post('/api/enroll/config', async ctx => {
     controlerEchecs(ctx);
-    const code = ctx.url.searchParams.get('code') || '';
+    const { code } = await corps(ctx, S.echange);
     const r2 = agents.echanger(code);
     if (!r2) refuserPreuve(ctx, 'Code d\'inscription invalide, expiré ou déjà utilisé.');
     return { token: r2.jeton, site: r2.site, name: r2.nom, relay: r2.relais, url: baseUrl(ctx) };
-  }, { public: true, ecrit: true });
+  }, { public: true });
 
   r.get('/api/enroll/agent.py', ctx => {
     // Une session d'opérateur, ou un code d'inscription encore valide.
@@ -439,9 +445,9 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if (res.erreur === 401) refuserPreuve(ctx, 'Jeton d\'agent invalide.');
     if (res.erreur === 429) throw new ErreurHttp(429, 'Limite de machines atteinte.');
     return { ok: true };
-  }, { public: true, ecrit: true });
+  }, { public: true });
 
-  r.get('/api/agent/jobs', ctx => {
+  r.post('/api/agent/jobs', ctx => {
     const m = agentDe(ctx);
     return taches.relever(m.id, cfg.delaiTache);
   }, { public: true });
@@ -451,7 +457,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const b = await corps(ctx, S.resultat, true);
     if (!taches.resultat(ctx.params.ref, m.id, b.output, b.rc)) throw new ErreurHttp(404, 'Tâche introuvable.');
     return { ok: true };
-  }, { public: true, ecrit: true });
+  }, { public: true });
 
   // ───────── helpers ─────────
   function agentDe(ctx) {

@@ -658,7 +658,7 @@ async function dialogueInscription(relais) {
   let os = detecterOs();
   let info = null;
   const rafraichirInfo = async () => {
-    try { info = await api.get(`/api/enroll/info?site=${encodeURIComponent(site.value.trim() || 'Agents')}&name=${encodeURIComponent(nom.value.trim())}${relais ? '&relay=1' : ''}`); }
+    try { info = await api.post('/api/enroll/info', { site: site.value.trim() || 'Agents', name: nom.value.trim(), relay: relais }); }
     catch (e) { toast(e.message, true); return; }
     peindreZone();
   };

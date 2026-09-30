@@ -574,7 +574,7 @@ def wol_send(payload):
 def poll_jobs(sess, base, headers, timeout):
     inventaire_a_refaire = False
     try:
-        r = sess.get(base + '/api/agent/jobs', headers=headers, timeout=10)
+        r = sess.post(base + '/api/agent/jobs', json={}, headers=headers, timeout=10)
         if r.status_code != 200:
             return False
         data = r.json()
@@ -625,7 +625,7 @@ def ecrire_config(cfg):
 
 
 def echanger_code(sess, url, code):
-    r = sess.get(url.rstrip('/') + '/api/enroll/config', params={'code': code}, timeout=20)
+    r = sess.post(url.rstrip('/') + '/api/enroll/config', json={'code': code}, timeout=20)
     if r.status_code != 200:
         raise RuntimeError('code d\'inscription refusé (%s)' % r.status_code)
     return r.json()['token']

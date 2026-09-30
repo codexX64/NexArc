@@ -51,8 +51,8 @@ async function lancer(dossier, extra = {}) {
 
 // Enrôle un agent : code (membre) → jeton → première remontée.
 async function enroler(cli, { site = 'Agents', nom = '', relais = false, hostname = 'poste-x' } = {}) {
-  const info = (await cli.get(`/api/enroll/info?site=${encodeURIComponent(site)}&name=${encodeURIComponent(nom)}${relais ? '&relay=1' : ''}`)).json;
-  const conf = (await cli.get(`/api/enroll/config?code=${info.code}`)).json;
+  const info = (await cli.post('/api/enroll/info', { site, name: nom, relay: relais })).json;
+  const conf = (await cli.post('/api/enroll/config', { code: info.code }, { origine: null })).json;
   const jeton = conf.token;
   const corps = { hostname, ip: '198.51.100.10', os: 'Ubuntu 24.04', oskind: 'lin', cpu: 12, ram: 40, disk: 55, av: 'à jour', fw: 'actif', enc: 'LUKS actif', patch: 0 };
   const r = await cli.req('POST', '/api/ingest', corps, { entetes: { 'x-agent-token': jeton }, origine: null });
@@ -179,8 +179,10 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
   // Les seules routes sans session : la sonde de santé, et ce qu'un agent
   // appelle avec son code d'inscription ou son jeton (vérifiés dans la route).
   const publiques = s.api.routeur.routes.filter(r => r.options?.public).map(r => `${r.methode} ${cheminDe(r)}`).sort();
-  assert.deepEqual(publiques, ['GET /api/agent/jobs', 'GET /api/enroll/agent.py', 'GET /api/enroll/config', 'GET /api/enroll/script', 'GET /api/health',
-    'POST /api/agent/jobs/AAAAAAAAAAAAAAAA/result', 'POST /api/ingest']);
+  assert.deepEqual(publiques, ['GET /api/enroll/agent.py', 'GET /api/enroll/script', 'GET /api/health',
+    'POST /api/agent/jobs', 'POST /api/agent/jobs/AAAAAAAAAAAAAAAA/result', 'POST /api/enroll/config', 'POST /api/ingest']);
+  // Aucun GET ne change l'état : tirer un code, l'échanger et relever ses tâches sont des POST.
+  for (const chemin of ['/api/enroll/info', '/api/enroll/config', '/api/agent/jobs']) assert.equal((await membre.get(chemin)).status, 405, `GET ${chemin}`);
   // La politique écrite ici plutôt que relue dans le routeur : une route
   // d'administration relâchée par erreur fait échouer cet essai.
   const admin = s.api.routeur.routes.filter(r => r.options?.role === 'admin').map(r => `${r.methode} ${cheminDe(r)}`).sort();
@@ -191,14 +193,14 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
 });
 
 test('agent : code d\'inscription à usage unique, remontée, relève et résultat de SES tâches seulement', async () => {
-  const info = (await membre.get('/api/enroll/info?site=Prod')).json;
+  const info = (await membre.post('/api/enroll/info', { site: 'Prod' })).json;
   assert.match(info.code, /^[A-Za-z0-9_-]{22}$/, 'code de 128 bits');
   const empreinte = crypto.createHash('sha256').update('inscription:' + info.code).digest('hex');
   assert.deepEqual(s.parc.db.prepare('SELECT empreinte FROM enrolements').all().map(r => r.empreinte).filter(e => e === empreinte), [empreinte], 'gardé par son empreinte');
   assert.equal(s.parc.db.prepare('SELECT COUNT(*) n FROM enrolements WHERE empreinte = ?').get(info.code).n, 0, 'jamais en clair');
-  const conf = (await membre.get(`/api/enroll/config?code=${info.code}`)).json;
+  const conf = (await membre.post('/api/enroll/config', { code: info.code })).json;
   assert.match(conf.token, /^sag_/);
-  assert.equal((await membre.get(`/api/enroll/config?code=${info.code}`)).status, 401, 'code consommé : usage unique');
+  assert.equal((await membre.post('/api/enroll/config', { code: info.code })).status, 401, 'code consommé : usage unique');
   const jeton = conf.token;
   const remonter = h => membre.req('POST', '/api/ingest', { hostname: h, ip: '198.51.100.20', oskind: 'lin', cpu: 5, ram: 10, disk: 20, av: 'à jour', fw: 'actif', enc: 'LUKS actif', patch: 0 }, { entetes: { 'x-agent-token': jeton }, origine: null });
   assert.equal((await remonter('poste-un')).status, 200);
@@ -207,13 +209,13 @@ test('agent : code d\'inscription à usage unique, remontée, relève et résult
   const t = await membre.post(`/api/machines/${mref}/jobs`, { kind: 'inventory' });
   assert.equal(t.status, 200);
   // l'agent relève SES tâches (identifié par son jeton, pas par un nom)
-  const releve = await membre.req('GET', '/api/agent/jobs', undefined, { entetes: { 'x-agent-token': jeton } });
+  const releve = await membre.req('POST', '/api/agent/jobs', {}, { entetes: { 'x-agent-token': jeton }, origine: null });
   assert.equal(releve.status, 200);
   assert.equal(releve.json.jobs.length, 1);
   assert.equal(releve.json.jobs[0].id, t.json.id);
   // un autre agent ne voit pas cette tâche
   const en2 = await enroler(autre, { hostname: 'poste-deux' });
-  const releve2 = await membre.req('GET', '/api/agent/jobs', undefined, { entetes: { 'x-agent-token': en2.jeton } });
+  const releve2 = await membre.req('POST', '/api/agent/jobs', {}, { entetes: { 'x-agent-token': en2.jeton }, origine: null });
   assert.equal(releve2.json.jobs.length, 0, 'aucun accès croisé aux tâches');
   // il ne peut pas rendre le résultat d'une tâche d'un autre
   assert.equal((await membre.req('POST', `/api/agent/jobs/${t.json.id}/result`, { output: 'volé', rc: 0 }, { entetes: { 'x-agent-token': en2.jeton } })).status, 404);
@@ -254,9 +256,9 @@ test('codes et jetons de machine : chaque échec compte pour l\'adresse, bloqué
     const machine = { origine: null };
     const statuts = [
       (await c.req('GET', '/api/summary', undefined, { ...machine, entetes: { authorization: 'Bearer jeton-du-hub-invente-pour-l-essai' } })).status,
-      (await c.get(`/api/enroll/config?code=${'A'.repeat(22)}`)).status,
+      (await c.post('/api/enroll/config', { code: 'A'.repeat(22) }, machine)).status,
       (await c.get(`/api/enroll/agent.py?code=${'A'.repeat(22)}`)).status,
-      (await c.req('GET', '/api/agent/jobs', undefined, { ...machine, entetes: { 'x-agent-token': 'sag_jeton_invente' } })).status,
+      (await c.req('POST', '/api/agent/jobs', {}, { ...machine, entetes: { 'x-agent-token': 'sag_jeton_invente' } })).status,
     ];
     for (let i = 0; i < 8; i++) statuts.push((await c.req('POST', '/api/ingest', { hostname: 'poste-x' }, { ...machine, entetes: { 'x-agent-token': 'sag_jeton_invente' } })).status);
     assert.deepEqual(statuts, [...Array(10).fill(401), 429, 429]);
@@ -598,7 +600,6 @@ test('migration 1.1.0 : comptes, machines, automatisations reprises ; l\'agent s
     const r = await c.post('/api/compte/connexion', { identifiant: 'operateur', motDePasse: 'ancienne phrase de passe sentinel', preuve: undefined });
     assert.ok([200, 428].includes(r.status), 'empreinte scrypt relue');
     // le réenrôlement d'un agent legacy le rattache à sa machine par le nom d'hôte
-    const info = (await new Client(v1.port).get('/api/enroll/info')).status; void info;
   } finally { await v1.arreter(); }
 });
 
@@ -803,7 +804,7 @@ test('sonde TLS : admin + renfort seulement, aucun octet applicatif, empreinte e
 });
 
 test('inscription : scripts Windows (Python + venv), Linux et macOS ; valeurs piégées refusées', async () => {
-  const info = (await membre.get('/api/enroll/info?site=Prod&name=serveur-a')).json;
+  const info = (await membre.post('/api/enroll/info', { site: 'Prod', name: 'serveur-a' })).json;
   assert.match(info.commands.windows, /^powershell -ExecutionPolicy Bypass -Command "irm '[^']+&name=serveur-a' \| iex"$/);
   assert.match(info.commands.linux, /&name=serveur-a' \| sudo bash$/);
   const anon = s.client();
@@ -822,12 +823,12 @@ test('inscription : scripts Windows (Python + venv), Linux et macOS ; valeurs pi
     fs.writeFileSync(f, r.texte);
     execFileSync('bash', ['-n', f]);   // syntaxe bash valide
   }
-  assert.equal((await anon.get(`/api/enroll/config?code=${info.code}`)).status, 200, 'télécharger les scripts ne consomme pas le code');
+  assert.equal((await anon.post('/api/enroll/config', { code: info.code })).status, 200, 'télécharger les scripts ne consomme pas le code');
   // Rien de ce qui entre dans un script root ne peut en sortir.
   const avant = s.parc.db.prepare('SELECT COUNT(*) n FROM enrolements').get().n;
   for (const piege of ["x';id;'", 'x"$(id)"', 'a`id`', 'a\\b']) {
-    assert.equal((await membre.get(`/api/enroll/info?site=${encodeURIComponent(piege)}`)).status, 422, piege);
-    assert.equal((await membre.get(`/api/enroll/info?name=${encodeURIComponent(piege)}`)).status, 422, piege);
+    assert.equal((await membre.post('/api/enroll/info', { site: piege })).status, 422, piege);
+    assert.equal((await membre.post('/api/enroll/info', { name: piege })).status, 422, piege);
     assert.equal((await membre.get(`/api/enroll/script?os=linux&code=${encodeURIComponent(piege)}`)).status, 422, `code ${piege} (session)`);
   }
   assert.equal(s.parc.db.prepare('SELECT COUNT(*) n FROM enrolements').get().n, avant, 'aucun code tiré pour une demande refusée');

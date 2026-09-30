@@ -50,8 +50,10 @@ await controle('tableau');
 // que le parc apparaisse : on exerce ainsi la fiche, les composants, les tâches.
 // Antivirus inactif : la page Alertes montre une alerte ouverte, pas une liste vide.
 await page.evaluate(async () => {
-  const info = await (await fetch('/api/enroll/info?site=Prod', { credentials: 'same-origin' })).json();
-  const conf = await (await fetch('/api/enroll/config?code=' + info.code)).json();
+  const { session } = await (await fetch('/api/compte/etat', { credentials: 'same-origin' })).json();
+  const json = { 'Content-Type': 'application/json' };
+  const info = await (await fetch('/api/enroll/info', { method: 'POST', credentials: 'same-origin', headers: { ...json, 'X-CSRF': session.csrf }, body: JSON.stringify({ site: 'Prod' }) })).json();
+  const conf = await (await fetch('/api/enroll/config', { method: 'POST', headers: json, body: JSON.stringify({ code: info.code }) })).json();
   await fetch('/api/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Agent-Token': conf.token }, body: JSON.stringify({ hostname: 'serveur-a', ip: '198.51.100.12', os: 'Ubuntu 24.04 LTS', oskind: 'lin', cpu: 22, ram: 48, disk: 61, av: 'inactif', fw: 'actif', enc: 'LUKS actif', patch: 2, inventory: { hostname: 'serveur-a', cpu_model: 'CPU', cpu_cores: 4, cpu_threads: 8, ram_total_gb: 16, disks: [{ device: '/dev/sda', mount: '/', fs: 'ext4', total_gb: 240, used_pct: 61 }], nics: [{ name: 'eth0', ip: '198.51.100.12', mac: '01:23:45:67:89:ab' }] } }) });
 });
 await page.reload();

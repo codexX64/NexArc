@@ -159,6 +159,53 @@ class Posture(unittest.TestCase):
         self.assertFalse(agent.nft_filtre_entree(ouvert))
 
 
+class Enregistre(BaseHTTPRequestHandler):
+    """Serveur Sentinel minimal : note chaque requête, répond comme le vrai."""
+    recues = []
+
+    def do_POST(self):  # noqa: N802 — nom imposé par http.server
+        corps = self.rfile.read(int(self.headers.get('Content-Length') or 0))
+        Enregistre.recues.append((self.command, self.path, self.headers.get('Content-Type'), self.headers.get('X-Agent-Token'), json.loads(corps or b'null')))
+        reponse = {'/api/enroll/config': {'token': 'sag_jeton_de_l_essai'},
+                   '/api/agent/jobs': {'jobs': [{'id': 'AAAAAAAAAAAAAAAA', 'kind': 'inventory', 'payload': ''}], 'timeout': 5}}.get(self.path, {'ok': True})
+        donnees = json.dumps(reponse).encode()
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(donnees)))
+        self.end_headers()
+        self.wfile.write(donnees)
+
+    def log_message(self, *a):
+        pass
+
+
+class Echanges(unittest.TestCase):
+    """Échanger un code et relever ses tâches changent l'état du serveur : des
+    POST en JSON, jamais des GET qu'un relais ou un journal garderaient."""
+
+    def setUp(self):
+        Enregistre.recues = []
+        self.serveur = ThreadingHTTPServer(('127.0.0.1', 0), Enregistre)
+        threading.Thread(target=self.serveur.serve_forever, daemon=True).start()
+        self.url = 'http://127.0.0.1:%d' % self.serveur.server_address[1]
+
+    def tearDown(self):
+        self.serveur.shutdown()
+        self.serveur.server_close()
+
+    def test_echange_du_code_en_post(self):
+        self.assertEqual(agent.echanger_code(agent.session_http(self.url), self.url, 'CODE_D_INSCRIPTION_22c'), 'sag_jeton_de_l_essai')
+        self.assertEqual(Enregistre.recues, [('POST', '/api/enroll/config', 'application/json', None, {'code': 'CODE_D_INSCRIPTION_22c'})])
+
+    def test_releve_et_resultat_en_post_avec_le_jeton(self):
+        entetes = {'X-Agent-Token': 'sag_jeton_de_l_essai', 'Content-Type': 'application/json'}
+        self.assertTrue(agent.poll_jobs(agent.session_http(self.url), self.url, entetes, 5))
+        self.assertEqual([r[:4] for r in Enregistre.recues], [
+            ('POST', '/api/agent/jobs', 'application/json', 'sag_jeton_de_l_essai'),
+            ('POST', '/api/agent/jobs/AAAAAAAAAAAAAAAA/result', 'application/json', 'sag_jeton_de_l_essai')])
+        self.assertEqual(Enregistre.recues[1][4], {'output': 'inventaire régénéré', 'rc': 0})
+
+
 class Durcissement(unittest.TestCase):
     def test_types_de_taches_identiques_au_serveur(self):
         with open(os.path.join(RACINE, 'src', 'taches.js'), encoding='utf-8') as f:
