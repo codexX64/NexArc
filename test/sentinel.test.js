@@ -172,7 +172,8 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
   // La politique écrite ici plutôt que relue dans le routeur : une route
   // d'administration relâchée par erreur fait échouer cet essai.
   const admin = s.api.routeur.routes.filter(r => r.options?.role === 'admin').map(r => `${r.methode} ${cheminDe(r)}`).sort();
-  assert.deepEqual(admin, ['DELETE /api/machines/AAAAAAAAAAAAAAAA', 'GET /api/machines/AAAAAAAAAAAAAAAA/pin', 'POST /api/machines/AAAAAAAAAAAAAAAA/pin', 'PUT /api/machines/AAAAAAAAAAAAAAAA/redfish']);
+  assert.deepEqual(admin, ['DELETE /api/machines/AAAAAAAAAAAAAAAA', 'GET /api/machines/AAAAAAAAAAAAAAAA/pin', 'POST /api/hosts', 'POST /api/machines/AAAAAAAAAAAAAAAA/pin',
+    'PUT /api/machines/AAAAAAAAAAAAAAAA/consoles', 'PUT /api/machines/AAAAAAAAAAAAAAAA/mesh-node', 'PUT /api/machines/AAAAAAAAAAAAAAAA/redfish']);
   // Le mandataire des consoles, hors routeur : session exigée.
   assert.equal((await anonyme.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 401);
   assert.equal((await lecteur.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 403);
@@ -293,8 +294,11 @@ test('réveil réseau : paquet magique bien formé et capturé ; sans relais en 
 test('consoles : mot de passe VNC scellé (admin+renfort), jamais rendu ; la cible du pont est côté serveur', async () => {
   const en = await enroler(membre, { hostname: 'poste-vnc' });
   const mref = refMachineParHote('poste-vnc');
-  // un membre ne peut pas poser un mot de passe d'appareil
+  // un membre ne déclare aucun accès distant, avec ou sans mot de passe d'appareil
   assert.equal((await membre.put(`/api/machines/${mref}/consoles`, { consoles: [{ type: 'vnc', target: '198.51.100.10:5900', label: 'KVM', vncpw: 'motdepasse-vnc' }] })).status, 403);
+  assert.equal((await membre.put(`/api/machines/${mref}/consoles`, { consoles: [{ type: 'url', target: 'http://198.51.100.10/', label: 'Web' }] })).status, 403, 'une adresse interne est choisie par un administrateur');
+  assert.equal((await membre.put(`/api/machines/${mref}/mesh-node`, { mesh_node: 'node//abc' })).status, 403);
+  await sansRenfort(async () => assert.equal((await admin.put(`/api/machines/${mref}/consoles`, { consoles: [] })).status, 403, 'renfort exigé'));
   // l'admin le peut ; le secret est scellé et ne ressort pas
   const r = await admin.put(`/api/machines/${mref}/consoles`, { consoles: [{ type: 'vnc', target: '198.51.100.10:5900', label: 'KVM', vncpw: 'motdepasse-vnc' }] });
   assert.equal(r.status, 200, JSON.stringify(r.json));
@@ -302,6 +306,9 @@ test('consoles : mot de passe VNC scellé (admin+renfort), jamais rendu ; la cib
   assert.equal(m.consoles[0].a_mdp, true);
   assert.ok(!JSON.stringify(m.consoles).includes('motdepasse-vnc'));
   assert.ok(!JSON.stringify(m.consoles).includes('vncpw'), 'ni la clé en clair ni le scellé ne sortent');
+  const trace = s.parc.db.prepare("SELECT acteur, objet, details FROM socle_journal WHERE action = 'consoles.modifiees' ORDER BY n DESC LIMIT 1").get();
+  assert.equal(trace.objet, 'poste-vnc', 'accès distant journalisé');
+  assert.ok(!trace.details.includes('motdepasse-vnc'), 'jamais le secret au journal');
 });
 
 test('mandataire des consoles : les cookies de Sentinel ne partent jamais vers la carte, la carte ne peut pas en poser', async () => {
@@ -331,13 +338,16 @@ test('mandataire des consoles : les cookies de Sentinel ne partent jamais vers l
 });
 
 test('hôte sans agent (carte de gestion) et refus d\'URL interdite', async () => {
-  const r = await membre.post('/api/hosts', { host: 'serveur-b', ip: '198.51.100.30', ctype: 'idrac', target: 'https://198.51.100.30', label: 'iDRAC' });
+  const carte = { host: 'serveur-b', ip: '198.51.100.30', ctype: 'idrac', target: 'https://198.51.100.30', label: 'iDRAC' };
+  assert.equal((await membre.post('/api/hosts', carte)).status, 403, 'un membre ne déclare pas une carte');
+  const r = await admin.post('/api/hosts', carte);
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.ok(r.json.machines.some(m => m.host === 'serveur-b' && m.source === 'kvm'));
+  assert.equal(s.parc.db.prepare("SELECT COUNT(*) n FROM socle_journal WHERE action = 'machine.ajoutee' AND objet = 'serveur-b'").get().n, 1);
   // métadonnées de nuage refusées
-  assert.equal((await membre.post('/api/hosts', { host: 'piege', ctype: 'url', target: 'http://169.254.169.254/latest/' })).status, 422);
+  assert.equal((await admin.post('/api/hosts', { host: 'piege', ctype: 'url', target: 'http://169.254.169.254/latest/' })).status, 422);
   // javascript: refusé
-  assert.equal((await membre.post('/api/hosts', { host: 'piege2', ctype: 'url', target: 'javascript:alert(1)' })).status, 422);
+  assert.equal((await admin.post('/api/hosts', { host: 'piege2', ctype: 'url', target: 'javascript:alert(1)' })).status, 422);
 });
 
 test('automatisations : création, activation, exécution ; un cmd exige l\'admin', async () => {
@@ -625,7 +635,7 @@ test('sonde TLS : admin + renfort seulement, aucun octet applicatif, empreinte e
   try {
     await enroler(membre, { hostname: 'srv-sonde' });
     const mref = refMachineParHote('srv-sonde');
-    assert.equal((await membre.put(`/api/machines/${mref}/consoles`, { consoles: [{ type: 'idrac', target: `https://127.0.0.1:${carte.port}`, label: 'iDRAC' }] })).status, 200);
+    assert.equal((await admin.put(`/api/machines/${mref}/consoles`, { consoles: [{ type: 'idrac', target: `https://127.0.0.1:${carte.port}`, label: 'iDRAC' }] })).status, 200);
     const chemin = `/api/machines/${mref}/pin?idx=0`;
     assert.equal((await s.client().get(chemin)).status, 401);
     assert.equal((await lecteur.get(chemin)).status, 403);

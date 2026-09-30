@@ -213,7 +213,9 @@ L'agent (`agent/sentinel-agent.py`, Python 3, `psutil` et `requests`) :
 
 ## Consoles et cartes de gestion
 
-Jusqu'à huit accès par machine. Types : console VNC intégrée (hôte:port, écran
+Jusqu'à huit accès par machine, déclarés par un administrateur sous
+confirmation récente (un accès dit où Sentinel se connecte sur le réseau
+interne), chaque déclaration inscrite au journal de sécurité. Types : console VNC intégrée (hôte:port, écran
 plein dans Sentinel, mot de passe scellé côté serveur), iDRAC, iLO, IPMI/BMC,
 JetKVM, hyperviseur (console noVNC des VM), interface web, MeshCentral. Une URL
 amont est jointe par un proxy inverse qui n'accepte que http(s), refuse les

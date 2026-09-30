@@ -411,7 +411,8 @@ function actionsDetail(m) {
   if (m.source === 'agent' && m.wol && !m.online) out.push(h('button', { class: 'btn', type: 'button', onclick: () => reveiller(m) }, icone('reveil', 15), 'Réveiller'));
   const items = m.consoles || [];
   if (items.length) out.push(h('button', { class: 'btn solid', type: 'button', onclick: () => ouvrirConsole(m, 0) }, icone('ecran2', 15), items[0].label));
-  if (peutAgir) out.push(h('button', { class: 'ghost', type: 'button', title: 'Accès distants', 'aria-label': 'Accès distants', onclick: () => gererConsoles(m) }, icone('reglages', 16)));
+  // Déclarer un accès distant (où le serveur se connecte) : administrateur.
+  if (admin) out.push(h('button', { class: 'ghost', type: 'button', title: 'Accès distants', 'aria-label': 'Accès distants', onclick: () => gererConsoles(m) }, icone('reglages', 16)));
   return out;
 }
 
@@ -505,7 +506,7 @@ async function ouvrirConsole(m, idx) {
     else window.open(r.url, '_blank', 'noopener');
   } catch (e) {
     if (e.status === 409 && /épingl/i.test(e.message || '') && admin) return epinglerConsole(m, idx);
-    if (e.status === 409) gererConsoles(m);
+    if (e.status === 409 && admin) gererConsoles(m);
     else if (e.status !== 401) toast(e.message || 'Impossible d\'ouvrir cet accès.', true);
   }
 }
@@ -672,7 +673,7 @@ async function dialogueInscription(relais) {
   let t;
   const relance = () => { clearTimeout(t); t = setTimeout(rafraichirInfo, 400); };
   site.addEventListener('input', relance); nom.addEventListener('input', relance);
-  const modeKvm = !relais ? boutonKvm() : null;
+  const modeKvm = !relais && admin ? boutonKvm() : null;
   await dialogue({ titre: relais ? 'Ajouter un nœud relais (Wake-on-LAN)' : 'Ajouter un poste', large: true,
     contenu: [
       relais ? h('div', { class: 'note info' }, icone('reveil'), h('div', { text: 'Installe-le sur une machine toujours allumée du VLAN à couvrir (un Raspberry Pi suffit).' })) : null,

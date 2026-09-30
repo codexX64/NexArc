@@ -144,28 +144,29 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return { url: item.target, embed: false, label: item.label, type: item.type };
   }, { role: 'membre' });
 
-  // Enregistrer/gérer les consoles. Un mot de passe VNC est un secret d'appareil :
-  // sa présence exige le rôle admin et un renfort récent.
+  // Un accès distant dit où le serveur se connecte sur le réseau interne, et
+  // porte parfois un secret d'appareil (mot de passe VNC) : seul un
+  // administrateur sous renfort récent le déclare, et le journal le garde.
   r.put('/api/machines/:ref/consoles', async ctx => {
-    session(ctx, { role: 'membre' });   // auth d'abord : anon → 401, lecture → 403
+    session(ctx, { role: 'admin', renfort: true });
     const b = await corps(ctx, S.consoles);
-    const contientSecret = Array.isArray(b.consoles) && b.consoles.some(c => c && typeof c === 'object' && c.vncpw);
-    if (contientSecret) portail.exiger(ctx, { role: 'admin', renfort: true }); // secret d'appareil
     const id = machine(ctx.params.ref);
     let items; try { items = normaliser(b.consoles, nodeValide); } catch (e) { throw new ErreurHttp(422, e.message); }
     parc.enregistrerConsoles(id, items);
+    journal.ecrire({ acteur: ctx.session.compte, action: 'consoles.modifiees', objet: parc.machine(id).host, ip: ctx.ip, details: { n: items.length, types: items.map(c => c.type).join(',') } });
     return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
-  }, { role: 'membre' });
+  }, { role: 'admin' });
 
   r.put('/api/machines/:ref/mesh-node', async ctx => {
-    session(ctx, { role: 'membre' });
+    session(ctx, { role: 'admin', renfort: true });
     const id = machine(ctx.params.ref);
     const b = await corps(ctx, S.meshNode);
     const node = (b.mesh_node || '').trim();
     if (node && !nodeValide(node)) throw new ErreurHttp(422, 'Nœud MeshCentral invalide.');
     db.prepare('UPDATE machines SET mesh_node = ? WHERE id = ?').run(node || null, id);
+    journal.ecrire({ acteur: ctx.session.compte, action: 'mesh.noeud', objet: parc.machine(id).host, ip: ctx.ip });
     return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
-  }, { role: 'membre' });
+  }, { role: 'admin' });
 
   // ───────── épinglage TLS (confiance au premier usage, confirmée par l'admin) ─────────
   // GET montre l'empreinte et le sujet ; POST la confirme et l'épingle. Les deux
@@ -238,15 +239,16 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   // ───────── hôtes sans agent (carte de gestion) ─────────
   r.post('/api/hosts', async ctx => {
-    session(ctx, { role: 'membre' });
+    session(ctx, { role: 'admin', renfort: true });
     const b = await corps(ctx, S.hote);
     let items; try { items = normaliser([{ type: b.ctype, target: b.target, label: b.label, embed: b.embed }], nodeValide); } catch (e) { throw new ErreurHttp(422, e.message); }
     if (db.prepare('SELECT 1 FROM machines WHERE host = ?').get(b.host)) throw new ErreurHttp(409, 'Une machine porte déjà ce nom.');
     const ref = crypto.randomBytes(12).toString('base64url');
     db.prepare(`INSERT INTO machines(ref, host, ip, site, os, oskind, role, source, consoles, last_report, cree)
       VALUES(?,?,?,?,?,?,?,'kvm',?,?,?)`).run(ref, b.host, b.ip || '—', b.site || 'Matériel', 'Carte d\'administration', 'hw', 'matériel', JSON.stringify(items), Date.now() / 1000, Date.now() / 1000);
+    journal.ecrire({ acteur: ctx.session.compte, action: 'machine.ajoutee', objet: b.host, ip: ctx.ip, details: { type: b.ctype } });
     return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
-  }, { role: 'membre' });
+  }, { role: 'admin' });
 
   r.del('/api/machines/:ref', ctx => {
     session(ctx, { role: 'admin', renfort: true });
