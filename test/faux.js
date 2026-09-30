@@ -8,6 +8,10 @@ import tls from 'node:tls';
 import http from 'node:http';
 import https from 'node:https';
 import dgram from 'node:dgram';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { certificatEssai } from '../socle/essai/smtp.js';
 import { reponseVnc } from '../src/vncbridge.js';
 import { accepter } from '../src/websocket.js';
@@ -149,4 +153,21 @@ export async function fauxTlsCompteur() {
   s.on('tlsClientError', () => { /* idem, pendant la poignée */ });
   await new Promise(r => s.listen(0, '127.0.0.1', r));
   return { host: '127.0.0.1', port: s.address().port, connexions, fermer: () => new Promise(f => s.close(f)) };
+}
+
+// Un certificat d'autorité et une feuille qu'il signe : la carte présente la
+// feuille, l'administrateur aurait épinglé l'autorité. Tiré par openssl.
+export function certificatsChaines(nom) {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'chaine-essai-'));
+  const f = n => path.join(d, n);
+  const openssl = (...args) => execFileSync('openssl', args, { stdio: 'ignore' });
+  const courbe = ['-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes'];
+  try {
+    openssl('req', '-x509', ...courbe, '-days', '1', '-subj', `/CN=${nom}-autorite`, '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign,digitalSignature', '-keyout', f('ca.key'), '-out', f('ca.pem'));
+    openssl('req', '-new', ...courbe, '-subj', `/CN=${nom}`, '-keyout', f('feuille.key'), '-out', f('feuille.csr'));
+    fs.writeFileSync(f('ext.cnf'), `subjectAltName=DNS:${nom},IP:127.0.0.1\n`);
+    openssl('x509', '-req', '-in', f('feuille.csr'), '-CA', f('ca.pem'), '-CAkey', f('ca.key'), '-set_serial', '2', '-days', '1', '-extfile', f('ext.cnf'), '-out', f('feuille.pem'));
+    const lire = n => fs.readFileSync(f(n), 'utf8');
+    return { autorite: { cle: lire('ca.key'), cert: lire('ca.pem') }, feuille: { cle: lire('feuille.key'), cert: lire('feuille.pem') } };
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
 }

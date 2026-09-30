@@ -11,11 +11,11 @@ import { demarrer } from '../src/main.js';
 import { Client } from '../socle/essai/client.js';
 import { adminComplet, membreInvite, MDP_ESSAI } from '../socle/essai/inscription.js';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { fauxSynapse, fauxRfb, fauxCarte, fauxWs, captureUdp, fauxRedfish, fauxTlsCompteur } from './faux.js';
+import { fauxSynapse, fauxRfb, fauxCarte, fauxWs, captureUdp, fauxRedfish, fauxTlsCompteur, certificatsChaines } from './faux.js';
 import { Coffre } from '../socle/src/chiffre.js';
 import { lookupGarde, hoteInterdit } from '../src/reseau.js';
 import { pont } from '../src/vncbridge.js';
-import { observer, agentEpingle } from '../src/tls.js';
+import { observer, agentEpingle, empreinte } from '../src/tls.js';
 import { connecter, Connexion } from '../src/websocket.js';
 import { emettre, diffusionDirigee, sousReseau } from '../src/wol.js';
 import { urlBureau, nodeValide } from '../src/mesh.js';
@@ -405,6 +405,20 @@ test('épinglage TLS : le certificat épinglé passe, une empreinte différente 
     // même empreinte épinglée, mais l'autre carte présente un autre certificat : refus
     await assert.rejects(new Promise((res, rej) => https.get({ host: autreCarte.host, port: autreCarte.port, path: '/', agent }, r => { r.resume(); res(r.statusCode); }).on('error', rej)), /épingl|certificat|self-signed|unable|verify/i);
   } finally { await carte.fermer(); await autreCarte.fermer(); }
+});
+
+test('épinglage TLS : un certificat signé par le certificat épinglé n\'est pas pour autant la carte épinglée', async () => {
+  const { autorite, feuille } = certificatsChaines('carte-c');
+  const s2 = https.createServer({ key: feuille.cle, cert: feuille.cert }, (req, res) => res.end('{"ok":true}'));
+  await new Promise(r => s2.listen(0, '127.0.0.1', r));
+  const joindre = agent => new Promise((res, rej) => https.get({ host: '127.0.0.1', port: s2.address().port, path: '/', agent }, r => { r.resume(); res(r.statusCode); }).on('error', rej));
+  try {
+    // La feuille est signée par le certificat épinglé, la chaîne se vérifie :
+    // seule l'empreinte la distingue, et elle suffit à la refuser.
+    const epinglee = empreinte(new crypto.X509Certificate(autorite.cert).fingerprint256);
+    await assert.rejects(joindre(agentEpingle({ fp: epinglee, pem: autorite.cert })), /empreinte du certificat différente de celle épinglée/);
+    await assert.rejects(connecter(`wss://127.0.0.1:${s2.address().port}/ws`, { pin: { fp: epinglee, pem: autorite.cert } }), /empreinte du certificat différente de celle épinglée/);
+  } finally { await new Promise(f => { s2.close(f); s2.closeAllConnections(); }); }
 });
 
 test('Redfish : identifiants scellés jamais rendus ; alimentation refusée tant que le certificat n\'est pas épinglé', async () => {
