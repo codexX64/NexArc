@@ -65,15 +65,17 @@ export class Agents {
     return !!(l && l.expire >= secondes());
   }
 
-  // Résout un jeton d'agent en sa machine, créant celle-ci à la première
-  // remontée. Renvoie null si le jeton n'est pas connu.
+  // La machine d'un jeton d'agent ; pour un jeton sans machine, { attente },
+  // sa ligne d'attente (absente si personne ne l'a tiré) : la machine naît à
+  // la première remontée. null pour un jeton mal formé.
   resoudre(jeton) {
     if (typeof jeton !== 'string' || jeton.length < 8 || jeton.length > 200) return null;
     const h = hashJeton(jeton);
     const m = this.db.prepare('SELECT * FROM machines WHERE jeton_hash = ?').get(h);
     if (m) return m;
     const attente = this.db.prepare('SELECT * FROM jetons_attente WHERE jeton_hash = ?').get(h);
-    if (!attente || attente.expire < secondes()) { if (attente) this.db.prepare('DELETE FROM jetons_attente WHERE jeton_hash = ?').run(h); return { attente }; }
+    // Un jeton en attente expiré est effacé ; l'appelant le refuse sur sa date.
+    if (attente && attente.expire < secondes()) this.db.prepare('DELETE FROM jetons_attente WHERE jeton_hash = ?').run(h);
     return { attente };
   }
 
