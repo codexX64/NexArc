@@ -610,7 +610,7 @@ async function gererConsoles(m) {
     h('span', { class: 'itile' }, icone('ecran2', 15)),
     h('div', {}, h('strong', { text: c.label }), h('small', { text: `${typeLabel(c.type)} · ${c.target}${c.embed ? ' · intégré' : ''}${c.a_mdp ? ' · mot de passe' : ''}` })),
     h('div', { class: 'fin' }, h('button', { class: 'ghost', type: 'button', 'aria-label': 'Retirer', onclick: async () => { cons.splice(i, 1); await sauverConsoles(); } }, icone('croix', 15))))) : [h('p', { class: 'hint', text: 'Aucun accès configuré.' })]));
-  const typeSel = h('select', { class: 'field' }, TYPES.map(t => h('option', { value: t.id, text: t.label + (t.recommande ? ' ★' : '') })));
+  const typeSel = h('select', { class: 'field' }, optionsDeTypes(TYPES));
   const cible = h('input', { class: 'field', spellcheck: 'false', placeholder: 'https://idrac.exemple.org' });
   const label = h('input', { class: 'field', maxlength: 40, placeholder: 'Libellé (optionnel)' });
   const vncpw = h('input', { class: 'field hide', type: 'password', placeholder: 'Mot de passe VNC (défini dans la carte)' });
@@ -642,6 +642,8 @@ async function gererConsoles(m) {
     boutons: [{ texte: 'Fermer', classe: 'solid', valeur: true }] });
 }
 function typeLabel(t) { return (TYPES || []).find(x => x.id === t)?.label || t; }
+// Les types d'accès proposés, les recommandés marqués d'une étoile.
+function optionsDeTypes(types) { return types.map(t => h('option', { value: t.id, text: t.label + (t.recommande ? ' ★' : '') })); }
 
 async function dialogueInscription(relais) {
   const site = h('input', { class: 'field', maxlength: 40, value: relais ? 'Relais' : 'Agents' });
@@ -688,7 +690,7 @@ async function dialogueKvm() {
   await chargerTypes();
   const host = h('input', { class: 'field', maxlength: 60, placeholder: 'Nom (ex. serveur-a)' });
   const ip = h('input', { class: 'field', maxlength: 45, placeholder: 'IP (optionnel)' });
-  const typeSel = h('select', { class: 'field' }, (TYPES || []).filter(t => t.url || t.vnc).map(t => h('option', { value: t.id, text: t.label + (t.recommande ? ' ★' : '') })));
+  const typeSel = h('select', { class: 'field' }, optionsDeTypes(TYPES.filter(t => t.url || t.vnc)));
   const site = h('input', { class: 'field', maxlength: 40, value: 'Matériel' });
   const cible = h('input', { class: 'field', spellcheck: 'false', placeholder: 'https://idrac.exemple.org' });
   const embed = h('input', { type: 'checkbox', checked: true });
@@ -702,7 +704,7 @@ async function dialogueKvm() {
       if (!host.value.trim()) { err.textContent = 'Donne un nom.'; return false; }
       if (!cible.value.trim()) { err.textContent = 'Renseigne l\'adresse de la console.'; return false; }
       try {
-        appliquerEtat(await api.post('/api/hosts', { host: host.value.trim(), ip: ip.value.trim(), site: site.value.trim() || 'Matériel', ctype: typeSel.value, target: cible.value.trim(), embed: embed.checked, label: typeSel.selectedOptions[0].textContent.replace(' ★', '') }));
+        appliquerEtat(await api.post('/api/hosts', { host: host.value.trim(), ip: ip.value.trim(), site: site.value.trim() || 'Matériel', ctype: typeSel.value, target: cible.value.trim(), embed: embed.checked, label: typeLabel(typeSel.value) }));
         toast('Matériel ajouté.'); return true;
       } catch (e) { err.textContent = e.message; return false; }
     } }] });
