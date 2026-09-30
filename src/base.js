@@ -113,10 +113,10 @@ export class Parc {
   machine(id) { return this.db.prepare('SELECT * FROM machines WHERE id = ?').get(id) || null; }
   machineParRef(ref) { const id = this.idDe(ref); return id ? this.machine(id) : null; }
 
-  consolesPubliques(items) {
-    return (items || []).map(it => {
-      const { vncpw_scelle, ...pub } = it;
-      if (it.type === 'vnc') pub.a_mdp = !!vncpw_scelle;
+  consolesPubliques(entrees) {
+    return (entrees || []).map(entree => {
+      const { vncpw_scelle, ...pub } = entree;
+      if (entree.type === 'vnc') pub.a_mdp = !!vncpw_scelle;
       return pub;
     });
   }
@@ -184,8 +184,8 @@ export class Parc {
     const agg = new Map();
     for (const r of rows) {
       if (r.source !== 'agent' || !r.updates) continue;
-      let items; try { items = JSON.parse(r.updates); } catch { continue; }
-      for (const u of items) {
+      let majs; try { majs = JSON.parse(r.updates); } catch { continue; }
+      for (const u of majs) {
         const cle = (u.name || '').slice(0, 120) + '|' + (u.kind || 'Système');
         const e = agg.get(cle) || { name: (u.name || '').slice(0, 120), kind: u.kind || 'Système', n: 0, sec: false, vers: new Set() };
         e.n++; e.sec = e.sec || !!u.security;
@@ -226,44 +226,44 @@ export class Parc {
   // Scelle tout mot de passe VNC (clé « vncpw » en clair → « vncpw_scelle »),
   // et préserve un mot de passe déjà scellé quand le client ré-enregistre sans
   // le retaper (l'UI ne renvoie jamais le secret). Le pin épinglé est préservé.
-  enregistrerConsoles(machineId, items) {
+  enregistrerConsoles(machineId, entrees) {
     const m = this.machine(machineId);
     if (!m) return false;
     const anciens = this.consolesEffectives(m);
     const parCle = new Map(anciens.map(o => [`${o.type}|${o.target}|${o.label}`, o]));
-    const out = items.map(it => {
-      const cle = `${it.type}|${it.target}|${it.label}`;
+    const ecrites = entrees.map(entree => {
+      const cle = `${entree.type}|${entree.target}|${entree.label}`;
       const avant = parCle.get(cle);
-      const e = { type: it.type, target: it.target, label: it.label, embed: it.embed };
-      if (avant?.pin) e.pin = avant.pin;                 // pin épinglé conservé
-      if (it.type === 'vnc') {
-        if (it.vncpw) e.vncpw_scelle = this.coffre.scelle('console-vnc', it.vncpw, m.ref + '|' + it.target);
-        else if (avant?.vncpw_scelle) e.vncpw_scelle = avant.vncpw_scelle;
+      const neuve = { type: entree.type, target: entree.target, label: entree.label, embed: entree.embed };
+      if (avant?.pin) neuve.pin = avant.pin;  // pin épinglé conservé
+      if (entree.type === 'vnc') {
+        if (entree.vncpw) neuve.vncpw_scelle = this.coffre.scelle('console-vnc', entree.vncpw, m.ref + '|' + entree.target);
+        else if (avant?.vncpw_scelle) neuve.vncpw_scelle = avant.vncpw_scelle;
       }
-      return e;
+      return neuve;
     });
-    this.db.prepare('UPDATE machines SET consoles = ? WHERE id = ?').run(JSON.stringify(out), machineId);
+    this.db.prepare('UPDATE machines SET consoles = ? WHERE id = ?').run(JSON.stringify(ecrites), machineId);
     return true;
   }
 
   entreeConsole(machineId, idx) {
     const m = this.machine(machineId);
     if (!m) return null;
-    const items = this.consolesEffectives(m);
-    return (idx >= 0 && idx < items.length) ? items[idx] : null;
+    const entrees = this.consolesEffectives(m);
+    return (idx >= 0 && idx < entrees.length) ? entrees[idx] : null;
   }
 
-  ouvrirVncPw(item, ref) {
-    if (!item?.vncpw_scelle) return '';
-    try { return this.coffre.ouvre('console-vnc', item.vncpw_scelle, ref + '|' + item.target); } catch { return ''; }
+  ouvrirVncPw(entree, ref) {
+    if (!entree?.vncpw_scelle) return '';
+    try { return this.coffre.ouvre('console-vnc', entree.vncpw_scelle, ref + '|' + entree.target); } catch { return ''; }
   }
 
   poserPinConsole(machineId, idx, pin) {
     const m = this.machine(machineId);
-    const items = this.consolesEffectives(m);
-    if (!items[idx]) return false;
-    items[idx] = { ...items[idx], pin };
-    this.db.prepare('UPDATE machines SET consoles = ? WHERE id = ?').run(JSON.stringify(items), machineId);
+    const entrees = this.consolesEffectives(m);
+    if (!entrees[idx]) return false;
+    entrees[idx] = { ...entrees[idx], pin };
+    this.db.prepare('UPDATE machines SET consoles = ? WHERE id = ?').run(JSON.stringify(entrees), machineId);
     return true;
   }
 
@@ -321,16 +321,16 @@ export class Parc {
     };
     transaction(this.db, () => {
       for (const m of this.db.prepare('SELECT id, ref, consoles, rf_secret FROM machines WHERE consoles IS NOT NULL OR rf_secret IS NOT NULL').all()) {
-        const items = this.consolesEffectives(m);
+        const entrees = this.consolesEffectives(m);
         let change = false;
-        for (const it of items) {
-          if (!it.vncpw_scelle) continue;
-          const aad = m.ref + '|' + it.target;
-          const r = rouvrir('console-vnc', it.vncpw_scelle, aad);
-          if (r.etat === 'ancien') { it.vncpw_scelle = this.coffre.scelle('console-vnc', r.clair, aad); bilan.vnc++; change = true; }
-          if (r.etat === 'illisible') { delete it.vncpw_scelle; bilan.retires++; change = true; }
+        for (const entree of entrees) {
+          if (!entree.vncpw_scelle) continue;
+          const aad = m.ref + '|' + entree.target;
+          const r = rouvrir('console-vnc', entree.vncpw_scelle, aad);
+          if (r.etat === 'ancien') { entree.vncpw_scelle = this.coffre.scelle('console-vnc', r.clair, aad); bilan.vnc++; change = true; }
+          if (r.etat === 'illisible') { delete entree.vncpw_scelle; bilan.retires++; change = true; }
         }
-        if (change) this.db.prepare('UPDATE machines SET consoles = ? WHERE id = ?').run(JSON.stringify(items), m.id);
+        if (change) this.db.prepare('UPDATE machines SET consoles = ? WHERE id = ?').run(JSON.stringify(entrees), m.id);
         if (m.rf_secret) {
           const r = rouvrir('redfish', m.rf_secret, m.ref);
           if (r.etat === 'ancien') { this.db.prepare('UPDATE machines SET rf_secret = ? WHERE id = ?').run(this.coffre.scelle('redfish', r.clair, m.ref), m.id); bilan.redfish++; }

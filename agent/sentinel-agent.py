@@ -573,11 +573,11 @@ def poll_jobs(sess, base, headers, timeout):
         r = sess.post(base + '/api/agent/jobs', json={}, headers=headers, timeout=10)
         if r.status_code != 200:
             return False
-        data = r.json()
-        job_timeout = int(data.get('timeout', timeout))
+        lot = r.json()
+        job_timeout = int(lot.get('timeout', timeout))
     except (requests.RequestException, ValueError):
         return False
-    for job in data.get('jobs', []):
+    for job in lot.get('jobs', []):
         print('[sentinel-agent] tâche %s %s' % (job.get('id'), job.get('kind')))
         rc, out = run_job(job, job_timeout)
         if job.get('kind') in ('install', 'uninstall', 'inventory', 'update'):
@@ -622,11 +622,11 @@ def restreindre_dossier():
 def ecrire_config(cfg):
     os.makedirs(CONFIG_DIR, exist_ok=True)
     restreindre_dossier()
-    tmp = CONFIG_FILE + '.tmp'
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    provisoire = CONFIG_FILE + '.tmp'
+    fd = os.open(provisoire, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, 'w') as f:
         json.dump(cfg, f)
-    os.replace(tmp, CONFIG_FILE)
+    os.replace(provisoire, CONFIG_FILE)
     try:
         os.chmod(CONFIG_FILE, 0o600)
     except OSError:

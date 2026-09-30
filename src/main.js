@@ -141,13 +141,13 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
 
   async function upgradeVnc(req, socket, ctx, ref, idx) {
     const id = parc.idDe(ref); if (!id) return refuser(socket, 404);
-    const item = parc.entreeConsole(id, idx);
-    if (!item || item.type !== 'vnc') return refuser(socket, 404);
-    const cible = String(item.target); const i = cible.lastIndexOf(':');
+    const entree = parc.entreeConsole(id, idx);
+    if (!entree || entree.type !== 'vnc') return refuser(socket, 404);
+    const cible = String(entree.target); const i = cible.lastIndexOf(':');
     const host = cible.slice(0, i).trim(), port = Number(cible.slice(i + 1));
     if (!host || !Number.isInteger(port)) return refuser(socket, 404);
     const m = parc.machine(id);
-    const motDePasse = parc.ouvrirVncPw(item, m.ref);
+    const motDePasse = parc.ouvrirVncPw(entree, m.ref);
     const offert = String(req.headers['sec-websocket-protocol'] || '').split(',').map(x => x.trim());
     const ws = accepter(req, socket, { sousProtocole: offert.includes('binary') ? 'binary' : null });
     // noVNC se reconnecte seul : une ligne par session et par console suffit.

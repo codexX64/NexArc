@@ -26,8 +26,8 @@ function requete(base, chemin, { user, password, pin, methode = 'GET', corps = n
   if (!pin) throw new Error('certificat non épinglé : confirme l\'empreinte de la carte');
   if (hoteInterdit(u.hostname)) throw new Error('adresse interdite');
   const entetes = { authorization: 'Basic ' + Buffer.from(`${user}:${password}`).toString('base64'), accept: 'application/json' };
-  let data = null;
-  if (corps) { data = JSON.stringify(corps); entetes['content-type'] = 'application/json'; entetes['content-length'] = Buffer.byteLength(data); }
+  let envoi = null;
+  if (corps) { envoi = JSON.stringify(corps); entetes['content-type'] = 'application/json'; entetes['content-length'] = Buffer.byteLength(envoi); }
   const opts = { method: methode, headers: entetes, timeout, lookup: lookupGarde, agent: agentEpingle(pin) };
   return new Promise((resolve, reject) => {
     const req = https.request(u, opts, res => {
@@ -41,7 +41,7 @@ function requete(base, chemin, { user, password, pin, methode = 'GET', corps = n
     });
     req.on('timeout', () => req.destroy(new Error('délai dépassé')));
     req.on('error', reject);
-    if (data) req.end(data); else req.end();
+    if (envoi) req.end(envoi); else req.end();
   });
 }
 

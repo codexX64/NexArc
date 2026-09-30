@@ -40,9 +40,9 @@ export function diffusionDirigee(ip) {
 // Émission locale (seulement si le conteneur est sur le réseau de l'hôte).
 export function emettre(mac, { diffusion = '255.255.255.255', ports = [9, 7] } = {}) {
   return new Promise((resolve, reject) => {
-    const clean = normaliserMac(mac);
-    if (!clean) return reject(new Error('adresse MAC invalide'));
-    const pkt = paquetMagique(clean);
+    const normalisee = normaliserMac(mac);
+    if (!normalisee) return reject(new Error('adresse MAC invalide'));
+    const pkt = paquetMagique(normalisee);
     const s = dgram.createSocket('udp4');
     s.once('error', e => { try { s.close(); } catch { /* déjà fermé */ } reject(e); });
     s.bind(() => {

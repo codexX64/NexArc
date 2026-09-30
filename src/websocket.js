@@ -21,7 +21,7 @@ const MAX_TRAME = 4 * 1024 * 1024;      // une trame de plus de 4 Mio n'est pas 
 const MAX_MESSAGE = 16 * 1024 * 1024;   // message réassemblé borné
 const OP = { suite: 0x0, texte: 0x1, binaire: 0x2, fermeture: 0x8, ping: 0x9, pong: 0xa };
 
-function accept(cle) {
+function acceptation(cle) {
   return crypto.createHash('sha1').update(cle + GUID).digest('base64');
 }
 
@@ -52,7 +52,7 @@ export function refuser(socket, code = 400, message = 'Bad Request') {
 export function accepter(req, socket, { sousProtocole = null } = {}) {
   const entetes = [
     'HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade',
-    `Sec-WebSocket-Accept: ${accept(req.headers['sec-websocket-key'])}`,
+    `Sec-WebSocket-Accept: ${acceptation(req.headers['sec-websocket-key'])}`,
   ];
   if (sousProtocole) entetes.push(`Sec-WebSocket-Protocol: ${sousProtocole}`);
   socket.write(entetes.join('\r\n') + '\r\n\r\n');
@@ -213,7 +213,7 @@ export function connecter(urlStr, { pin = null, entetes = {}, timeout = 15000 } 
       const tete = tampon.subarray(0, sep).toString('latin1');
       if (!/^HTTP\/1\.1 101 /.test(tete)) return surErreur(new Error('mise à niveau refusée : ' + tete.split('\r\n')[0]));
       const m = /sec-websocket-accept:\s*(.+)\r?/i.exec(tete);
-      if (!m || m[1].trim() !== accept(cle)) return surErreur(new Error('Sec-WebSocket-Accept invalide'));
+      if (!m || m[1].trim() !== acceptation(cle)) return surErreur(new Error('Sec-WebSocket-Accept invalide'));
       socket.removeListener('data', surDonnees);
       const conn = new Connexion(socket, { role: 'client' });
       const reste = tampon.subarray(sep + 4);

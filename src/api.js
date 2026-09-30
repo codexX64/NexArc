@@ -186,24 +186,24 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     session(ctx, { role: 'membre' });
     const { idx } = await corps(ctx, S.acces);
     const m = parc.machine(machine(ctx.params.ref));
-    const items = parc.consolesEffectives(m);
-    if (!items.length) throw new ErreurHttp(409, 'Aucun accès distant configuré pour cette machine.');
-    if (idx >= items.length) throw new ErreurHttp(404, 'Accès introuvable.');
-    const item = items[idx];
-    if (item.type === 'vnc') return { type: 'vnc', embed: true, idx, label: item.label }; // le client ouvre /vnc/...
-    if (item.type === 'mesh') {
+    const entrees = parc.consolesEffectives(m);
+    if (!entrees.length) throw new ErreurHttp(409, 'Aucun accès distant configuré pour cette machine.');
+    if (idx >= entrees.length) throw new ErreurHttp(404, 'Accès introuvable.');
+    const entree = entrees[idx];
+    if (entree.type === 'vnc') return { type: 'vnc', embed: true, idx, label: entree.label }; // le client ouvre /vnc/...
+    if (entree.type === 'mesh') {
       if (!meshActif()) throw new ErreurHttp(503, 'MeshCentral non configuré.');
-      const url = urlBureau(item.target, { meshUrl: cfg.meshUrl, user: cfg.meshUser, cle: cfg.meshCle, viewmode: cfg.meshViewmode, hide: cfg.meshHide });
+      const url = urlBureau(entree.target, { meshUrl: cfg.meshUrl, user: cfg.meshUser, cle: cfg.meshCle, viewmode: cfg.meshViewmode, hide: cfg.meshHide });
       // Avec la clé de connexion, l'adresse porte un jeton de bureau distant.
       journal.ecrire({ acteur: ctx.session.compte, action: 'console.ouverte', objet: m.host, ip: ctx.ip, details: { type: 'mesh', idx } });
-      return { url, embed: cfg.meshEmbed, label: item.label, type: 'mesh' };
+      return { url, embed: cfg.meshEmbed, label: entree.label, type: 'mesh' };
     }
-    if (item.embed && consoles) {
+    if (entree.embed && consoles) {
       // Pas de passe pour une carte que le mandataire refuserait de joindre.
-      if (/^https/i.test(item.target) && !item.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé : confirme son empreinte.');
-      return { url: consoles.ouvrir(ctx, m, idx, item.type), embed: true, label: item.label, type: item.type };
+      if (/^https/i.test(entree.target) && !entree.pin) throw new ErreurHttp(409, 'Certificat de la carte non épinglé : confirme son empreinte.');
+      return { url: consoles.ouvrir(ctx, m, idx, entree.type), embed: true, label: entree.label, type: entree.type };
     }
-    return { url: item.target, embed: false, label: item.label, type: item.type };
+    return { url: entree.target, embed: false, label: entree.label, type: entree.type };
   }, { role: 'membre' });
 
   // Un accès distant dit où le serveur se connecte sur le réseau interne, et
@@ -213,9 +213,9 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     session(ctx, { role: 'admin', renfort: true });
     const b = await corps(ctx, S.consoles);
     const id = machine(ctx.params.ref);
-    let items; try { items = normaliser(b.consoles, nodeValide); } catch (e) { throw new ErreurHttp(422, e.message); }
-    parc.enregistrerConsoles(id, items);
-    journal.ecrire({ acteur: ctx.session.compte, action: 'consoles.modifiees', objet: parc.machine(id).host, ip: ctx.ip, details: { n: items.length, types: items.map(c => c.type).join(',') } });
+    let entrees; try { entrees = normaliser(b.consoles, nodeValide); } catch (e) { throw new ErreurHttp(422, e.message); }
+    parc.enregistrerConsoles(id, entrees);
+    journal.ecrire({ acteur: ctx.session.compte, action: 'consoles.modifiees', objet: parc.machine(id).host, ip: ctx.ip, details: { n: entrees.length, types: entrees.map(c => c.type).join(',') } });
     return etatParc();
   }, { role: 'admin' });
 
@@ -296,11 +296,11 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   r.post('/api/hosts', async ctx => {
     session(ctx, { role: 'admin', renfort: true });
     const b = await corps(ctx, S.hote);
-    let items; try { items = normaliser([{ type: b.ctype, target: b.target, label: b.label, embed: b.embed }], nodeValide); } catch (e) { throw new ErreurHttp(422, e.message); }
+    let entrees; try { entrees = normaliser([{ type: b.ctype, target: b.target, label: b.label, embed: b.embed }], nodeValide); } catch (e) { throw new ErreurHttp(422, e.message); }
     if (db.prepare('SELECT 1 FROM machines WHERE host = ?').get(b.host)) throw new ErreurHttp(409, 'Une machine porte déjà ce nom.');
     const ref = crypto.randomBytes(12).toString('base64url');
     db.prepare(`INSERT INTO machines(ref, host, ip, site, os, oskind, role, source, consoles, last_report, cree)
-      VALUES(?,?,?,?,?,?,?,'kvm',?,?,?)`).run(ref, b.host, b.ip || '—', b.site || 'Matériel', 'Carte d\'administration', 'hw', 'matériel', JSON.stringify(items), Date.now() / 1000, Date.now() / 1000);
+      VALUES(?,?,?,?,?,?,?,'kvm',?,?,?)`).run(ref, b.host, b.ip || '—', b.site || 'Matériel', 'Carte d\'administration', 'hw', 'matériel', JSON.stringify(entrees), Date.now() / 1000, Date.now() / 1000);
     journal.ecrire({ acteur: ctx.session.compte, action: 'machine.ajoutee', objet: b.host, ip: ctx.ip, details: { type: b.ctype } });
     return etatParc();
   }, { role: 'admin' });
@@ -478,9 +478,9 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     // Le jeton d'abord : un inconnu ne fait lire ni valider 512 Kio.
     if (!agents.jetonConnu(jeton)) refuserPreuve(ctx, 'Jeton d\'agent invalide.');
     const b = await corps(ctx, S.ingest, true);
-    const res = agents.ingest(jeton, b);
-    if (res.erreur === 401) refuserPreuve(ctx, 'Jeton d\'agent invalide.');
-    if (res.erreur === 429) throw new ErreurHttp(429, 'Limite de machines atteinte.');
+    const remontee = agents.ingest(jeton, b);
+    if (remontee.erreur === 401) refuserPreuve(ctx, 'Jeton d\'agent invalide.');
+    if (remontee.erreur === 429) throw new ErreurHttp(429, 'Limite de machines atteinte.');
     return { ok: true };
   }, { public: true });
 
@@ -506,8 +506,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }
   function agentDe(ctx) {
     controlerEchecs(ctx);
-    const res = agents.resoudre(String(ctx.req.headers['x-agent-token'] || ''));
-    return res?.id ? res : refuserPreuve(ctx, 'Jeton d\'agent invalide.');
+    const machineAgent = agents.resoudre(String(ctx.req.headers['x-agent-token'] || ''));
+    return machineAgent?.id ? machineAgent : refuserPreuve(ctx, 'Jeton d\'agent invalide.');
   }
   // Les fichiers d'inscription s'ouvrent à un opérateur (session membre) ou à
   // qui tient un code encore valide ; rend le code demandé.
@@ -528,11 +528,11 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       if (!/^https:/i.test(base)) throw new ErreurHttp(422, REDFISH_HTTPS);
       const u = new URL(base); return { host: u.hostname, port: Number(u.port) || 443, redfish: true };
     }
-    const item = parc.consolesEffectives(m)[idx];
-    if (!item) throw new ErreurHttp(404, 'Console introuvable.');
-    if (item.type === 'vnc') { const h = item.target.slice(0, item.target.lastIndexOf(':')); throw new ErreurHttp(422, `La console VNC ${h} n'utilise pas TLS : rien à épingler.`); }
-    if (!/^https/i.test(item.target)) throw new ErreurHttp(422, 'Console non-TLS : rien à épingler.');
-    const u = new URL(item.target); return { host: u.hostname, port: Number(u.port) || 443, idx };
+    const entree = parc.consolesEffectives(m)[idx];
+    if (!entree) throw new ErreurHttp(404, 'Console introuvable.');
+    if (entree.type === 'vnc') { const h = entree.target.slice(0, entree.target.lastIndexOf(':')); throw new ErreurHttp(422, `La console VNC ${h} n'utilise pas TLS : rien à épingler.`); }
+    if (!/^https/i.test(entree.target)) throw new ErreurHttp(422, 'Console non-TLS : rien à épingler.');
+    const u = new URL(entree.target); return { host: u.hostname, port: Number(u.port) || 443, idx };
   }
   function couverture() {
     const rows = db.prepare("SELECT host, ip, role, last_report, site FROM machines WHERE source = 'agent'").all();

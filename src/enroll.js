@@ -10,8 +10,6 @@
 // d'abord validée par motif (aucune apostrophe, guillemet, dollar, accent grave
 // ni barre oblique inverse ne passe), puis placée entre apostrophes, où ni bash
 // ni PowerShell n'interprètent rien.
-const q = s => encodeURIComponent(s);
-
 const CODE_INSCRIPTION = /^[A-Za-z0-9_-]{22}$/;
 const LIBELLE = /^[\p{L}\p{N} ._()-]{0,60}$/u;
 const BASE = /^https?:\/\/(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+)(:\d{1,5})?(\/[A-Za-z0-9._~/-]*)?$/;
@@ -25,13 +23,13 @@ export function controler(base, { code = null, site = '', nom = '' } = {}) {
   return null;
 }
 
-const base$ = b => b.replace(/\/+$/, '');
+const sansBarreFinale = b => b.replace(/\/+$/, '');
 
 function scriptLinux(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
   return `#!/usr/bin/env bash
 # Sentinel — installation de l'agent (Linux, systemd). Lance avec sudo.
 set -euo pipefail
-URL='${base$(base)}'; CODE='${code}'; SITE='${site}'; NOM='${nom}'; RELAIS='${relais ? '1' : '0'}'
+URL='${sansBarreFinale(base)}'; CODE='${code}'; SITE='${site}'; NOM='${nom}'; RELAIS='${relais ? '1' : '0'}'
 DIR=/opt/sentinel-agent
 [ "$(id -u)" -eq 0 ] || { echo "Lance ce script avec sudo."; exit 1; }
 echo "→ Dépendances"
@@ -55,7 +53,7 @@ function scriptMacos(base, code, { site = 'Agents', nom = '', relais = false } =
   return `#!/usr/bin/env bash
 # Sentinel — installation de l'agent (macOS, launchd). Lance avec sudo.
 set -euo pipefail
-URL='${base$(base)}'; CODE='${code}'; SITE='${site}'; NOM='${nom}'; RELAIS='${relais ? '1' : '0'}'
+URL='${sansBarreFinale(base)}'; CODE='${code}'; SITE='${site}'; NOM='${nom}'; RELAIS='${relais ? '1' : '0'}'
 DIR=/usr/local/sentinel-agent
 [ "$(id -u)" -eq 0 ] || { echo "Lance ce script avec sudo."; exit 1; }
 command -v python3 >/dev/null || { echo "python3 requis (xcode-select --install)"; exit 1; }
@@ -79,7 +77,7 @@ function scriptWindows(base, code, { site = 'Agents', nom = '', relais = false }
   return `# Sentinel - installation de l'agent (Windows). PowerShell en administrateur :
 #   powershell -ExecutionPolicy Bypass -File .\\installer-sentinel.ps1
 $ErrorActionPreference = "Stop"
-$Url = '${base$(base)}'; $Code = '${code}'; $Site = '${site}'; $Nom = '${nom}'; $Relais = '${relais ? '1' : '0'}'
+$Url = '${sansBarreFinale(base)}'; $Code = '${code}'; $Site = '${site}'; $Nom = '${nom}'; $Relais = '${relais ? '1' : '0'}'
 $Dir = "$env:ProgramData\\SentinelAgent"
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
   Write-Error "Relance PowerShell en tant qu'administrateur."; exit 1
@@ -139,9 +137,9 @@ export const BUILDERS = {
 };
 
 export function uneLigne(os, base, code, { site = '', nom = '', relais = false } = {}) {
-  let url = `${base$(base)}/api/enroll/script?os=${os}&code=${code}`;
-  if (site) url += `&site=${q(site)}`;
-  if (nom) url += `&name=${q(nom)}`;
+  let url = `${sansBarreFinale(base)}/api/enroll/script?os=${os}&code=${code}`;
+  if (site) url += `&site=${encodeURIComponent(site)}`;
+  if (nom) url += `&name=${encodeURIComponent(nom)}`;
   if (relais) url += '&relais=1';
   if (os === 'windows') return `powershell -ExecutionPolicy Bypass -Command "irm '${url}' | iex"`;
   return `curl -fsSL '${url}' | sudo bash`;

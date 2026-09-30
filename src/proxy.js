@@ -12,13 +12,13 @@ import https from 'node:https';
 import { agentEpingle } from './tls.js';
 import { hoteInterdit, lookupGarde } from './reseau.js';
 
-const STRIP_RESPONSE = new Set([
+const RETIRES_DE_LA_REPONSE = new Set([
   'x-frame-options', 'content-security-policy', 'content-security-policy-report-only',
   'content-encoding', 'content-length', 'transfer-encoding', 'connection', 'keep-alive',
   'public-key-pins', 'strict-transport-security', 'set-cookie', 'location',
   'cache-control', 'x-content-type-options', 'referrer-policy', 'permissions-policy', 'cross-origin-opener-policy',
 ]);
-const STRIP_REQUEST = new Set([
+const RETIRES_DE_LA_REQUETE = new Set([
   'host', 'connection', 'keep-alive', 'proxy-authenticate', 'cookie2', 'proxy-authorization',
   'te', 'trailers', 'transfer-encoding', 'upgrade', 'accept-encoding',
 ]);
@@ -83,7 +83,7 @@ export function mandaterHttp(req, res, { base, reste, prefix, pin, corps, parent
   const cible = new URL(cibleAmont(base, reste || '', new URL(req.url, 'http://x').search.slice(1)));
   const secure = cible.protocol === 'https:';
   const entetes = {};
-  for (const [k, v] of Object.entries(req.headers)) if (!STRIP_REQUEST.has(k.toLowerCase())) entetes[k] = v;
+  for (const [k, v] of Object.entries(req.headers)) if (!RETIRES_DE_LA_REQUETE.has(k.toLowerCase())) entetes[k] = v;
   delete entetes.cookie;
   const cookies = cookiesPourLaCarte(req.headers.cookie);
   if (cookies) entetes.cookie = cookies;
@@ -94,16 +94,16 @@ export function mandaterHttp(req, res, { base, reste, prefix, pin, corps, parent
     if (!pin) { res.writeHead(409, { 'Content-Type': 'application/json' }); return res.end('{"error":"Certificat de la carte non épinglé : confirme son empreinte."}'); }
     opts.agent = agentEpingle(pin);
   }
-  const mod = secure ? https : http;
+  const transport = secure ? https : http;
   const amontBase = `${cible.protocol}//${cible.host}`;
-  const up = mod.request(cible, opts, ru => {
+  const amont = transport.request(cible, opts, reponse => {
     const sortie = {};
     const poses = [];
-    for (const [k, v] of Object.entries(ru.headers)) {
-      const low = k.toLowerCase();
-      if (STRIP_RESPONSE.has(low)) {
-        if (low === 'set-cookie') for (const c of [].concat(v)) if (!COOKIES_DU_SERVICE.test(c.split('=')[0].trim())) poses.push(reecrireSetCookie(c, prefix));
-        if (low === 'location') sortie.Location = reecrireLocation([].concat(v)[0], amontBase, prefix);
+    for (const [k, v] of Object.entries(reponse.headers)) {
+      const nom = k.toLowerCase();
+      if (RETIRES_DE_LA_REPONSE.has(nom)) {
+        if (nom === 'set-cookie') for (const c of [].concat(v)) if (!COOKIES_DU_SERVICE.test(c.split('=')[0].trim())) poses.push(reecrireSetCookie(c, prefix));
+        if (nom === 'location') sortie.Location = reecrireLocation([].concat(v)[0], amontBase, prefix);
         continue;
       }
       sortie[k] = v;
@@ -112,23 +112,23 @@ export function mandaterHttp(req, res, { base, reste, prefix, pin, corps, parent
     sortie['Referrer-Policy'] = 'no-referrer';
     sortie['X-Content-Type-Options'] = 'nosniff';
     sortie['Cache-Control'] = 'no-store';
-    const ctype = String(ru.headers['content-type'] || '');
+    const ctype = String(reponse.headers['content-type'] || '');
     if (/text\/html/i.test(ctype)) {
       const morceaux = []; let taille = 0;
-      ru.on('data', c => { taille += c.length; if (taille > 8 * 1024 * 1024) up.destroy(new Error('page trop volumineuse')); else morceaux.push(c); });
-      ru.on('end', () => {
+      reponse.on('data', c => { taille += c.length; if (taille > 8 * 1024 * 1024) amont.destroy(new Error('page trop volumineuse')); else morceaux.push(c); });
+      reponse.on('end', () => {
         const html = reecrireHtml(Buffer.concat(morceaux), prefix);
         sortie['Content-Length'] = Buffer.byteLength(html);
         if (poses.length) sortie['Set-Cookie'] = poses;
-        res.writeHead(ru.statusCode, sortie);
+        res.writeHead(reponse.statusCode, sortie);
         res.end(req.method === 'HEAD' ? undefined : html);
       });
     } else {
       if (poses.length) sortie['Set-Cookie'] = poses;
-      res.writeHead(ru.statusCode, sortie);
-      ru.pipe(res);
+      res.writeHead(reponse.statusCode, sortie);
+      reponse.pipe(res);
     }
   });
-  up.on('error', () => { if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'application/json' }); res.end('{"error":"Console injoignable."}'); } });
-  if (corps && corps.length) up.end(corps); else up.end();
+  amont.on('error', () => { if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'application/json' }); res.end('{"error":"Console injoignable."}'); } });
+  if (corps && corps.length) amont.end(corps); else amont.end();
 }

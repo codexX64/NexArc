@@ -35,7 +35,7 @@ class Lecteur {
   _servir() {
     if (this.attente && this.buf.length >= this.attente.n) {
       const { n, res } = this.attente; this.attente = null;
-      const out = this.buf.subarray(0, n); this.buf = this.buf.subarray(n); res(out);
+      const morceau = this.buf.subarray(0, n); this.buf = this.buf.subarray(n); res(morceau);
     }
   }
   lire(n) {
@@ -57,8 +57,8 @@ async function authServeur(lecteur, tcp, motDePasse) {
     tcp.write(Buffer.from([2]));
     const defi = await lecteur.lire(16);
     tcp.write(reponseVnc(motDePasse, defi));
-    const res = (await lecteur.lire(4)).readUInt32BE(0);
-    if (res !== 0) throw new Error('mot de passe VNC refusé');
+    const verdict = (await lecteur.lire(4)).readUInt32BE(0);
+    if (verdict !== 0) throw new Error('mot de passe VNC refusé');
   } else if (types.includes(1)) {                     // None
     tcp.write(Buffer.from([1]));
     if (version.toString('latin1') >= 'RFB 003.008') await lecteur.lire(4);

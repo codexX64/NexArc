@@ -70,9 +70,9 @@ export class OrigineConsoles {
       this.passes.delete(sha256hex(passe));
       return null;
     }
-    const item = this.parc.entreeConsole(p.machineId, p.idx);
-    if (!item || !/^https?:\/\//i.test(item.target)) return null;
-    return { ...p, base: item.target.replace(/\/+$/, ''), pin: item.pin || null };
+    const entree = this.parc.entreeConsole(p.machineId, p.idx);
+    if (!entree || !/^https?:\/\//i.test(entree.target)) return null;
+    return { ...p, base: entree.target.replace(/\/+$/, ''), pin: entree.pin || null };
   }
 
   // Une console n'a besoin que du plein écran et du presse-papiers ; le reste
@@ -131,16 +131,16 @@ export class OrigineConsoles {
     const amont = `${cible.base.startsWith('https') ? 'wss' : 'ws'}://${cible.base.replace(/^https?:\/\//, '')}/${m[2]}${url.search}`;
     // La carte d'abord : un message que le navigateur enverrait dès la
     // poignée de main ne se perd pas pendant qu'on la joint.
-    let up = null;
-    try { up = await connecter(amont, { pin: cible.pin }); } catch { /* carte injoignable : dit au navigateur ci-dessous */ }
-    if (socket.destroyed) return up?.close();
+    let carte = null;
+    try { carte = await connecter(amont, { pin: cible.pin }); } catch { /* carte injoignable : dit au navigateur ci-dessous */ }
+    if (socket.destroyed) return carte?.close();
     const ws = accepter(req, socket, {});
-    if (!up) return ws.fermerCode(1011, 'console injoignable');
-    ws.on('binaire', d => up.envoyerBinaire(d));
-    ws.on('texte', t => up.envoyerTexte(t));
-    up.on('binaire', d => ws.envoyerBinaire(d));
-    up.on('texte', t => ws.envoyerTexte(t));
-    ws.on('fermeture', () => up.close());
-    up.on('fermeture', () => ws.close());
+    if (!carte) return ws.fermerCode(1011, 'console injoignable');
+    ws.on('binaire', d => carte.envoyerBinaire(d));
+    ws.on('texte', t => carte.envoyerTexte(t));
+    carte.on('binaire', d => ws.envoyerBinaire(d));
+    carte.on('texte', t => ws.envoyerTexte(t));
+    ws.on('fermeture', () => carte.close());
+    carte.on('fermeture', () => ws.close());
   }
 }
