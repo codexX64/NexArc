@@ -147,7 +147,10 @@ Vérifications : `npm test` (serveur, vrais serveurs HTTP, TLS, WebSocket et
 UDP simulés), `python3 -m unittest agent/test_agent.py` (agent : vérification
 TLS sur les deux chemins, lecture de la posture ; demande `psutil`, `requests`
 et Node), `node outils/exercice-rotation.mjs` (rotation de la clé maîtresse de
-bout en bout), `node outils/parcours-navigateur.mjs <url> <jeton> [dossier]`
+bout en bout), `node outils/exercice-incident.mjs` (runbook d'incident joué sur
+une instance lancée comme en production : détection, sessions fermées,
+commande libre et Hub coupés, jetons d'agents révoqués, mot de passe forcé,
+sauvegarde restaurée), `node outils/parcours-navigateur.mjs <url> <jeton> [dossier]`
 (parcours dans Chromium, sept largeurs, avec Playwright).
 
 ## Sauvegardes

@@ -10,6 +10,7 @@
     "start": "node --disable-warning=ExperimentalWarning src/main.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
     "test:agent": "python3 -m unittest agent/test_agent.py",
-    "exercice:rotation": "node --disable-warning=ExperimentalWarning outils/exercice-rotation.mjs"
+    "exercice:rotation": "node --disable-warning=ExperimentalWarning outils/exercice-rotation.mjs",
+    "exercice:incident": "node --disable-warning=ExperimentalWarning outils/exercice-incident.mjs"
   }
 }
