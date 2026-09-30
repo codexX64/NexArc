@@ -64,7 +64,7 @@ export async function fauxCarte(reponse = (req, res) => res.end('<html><head></h
   const c = certificatEssai('carte-a');
   const s = https.createServer({ key: c.cle, cert: c.cert }, reponse);
   await new Promise(r => s.listen(0, '127.0.0.1', r));
-  return { host: '127.0.0.1', port: s.address().port, cert: c.cert, fermer: () => new Promise(f => s.close(f)) };
+  return { host: '127.0.0.1', port: s.address().port, cert: c.cert, fermer: () => new Promise(f => { s.close(f); s.closeAllConnections(); }) };
 }
 
 // WebSocket simulé côté navigateur, pour piloter pont() sans vraie socket.

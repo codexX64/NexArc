@@ -299,6 +299,32 @@ test('consoles : mot de passe VNC scellé (admin+renfort), jamais rendu ; la cib
   assert.ok(!JSON.stringify(m.consoles).includes('vncpw'), 'ni la clé en clair ni le scellé ne sortent');
 });
 
+test('mandataire des consoles : les cookies de Sentinel ne partent jamais vers la carte, la carte ne peut pas en poser', async () => {
+  const recus = [];
+  const carte = await fauxCarte((req, res) => {
+    recus.push(req.headers.cookie || '');
+    res.setHeader('Set-Cookie', ['session-carte=posee; Path=/', 'sentinel-sid=volee; Path=/', '__Host-autre=x; Path=/; Secure']);
+    res.setHeader('Content-Type', 'text/html');
+    res.end('<html><head></head><body>carte</body></html>');
+  });
+  try {
+    await enroler(membre, { hostname: 'srv-mandataire' });
+    const mref = refMachineParHote('srv-mandataire');
+    assert.equal((await admin.put(`/api/machines/${mref}/consoles`, { consoles: [{ type: 'idrac', target: `https://127.0.0.1:${carte.port}`, label: 'iDRAC', embed: true }] })).status, 200);
+    const vu = await admin.get(`/api/machines/${mref}/pin?idx=0`);
+    assert.equal((await admin.post(`/api/machines/${mref}/pin`, { idx: 0, fp: vu.json.fp })).status, 200);
+    membre.cookies.set('session-carte', 'ouverte');
+    try {
+      const r = await membre.get(`/api/machines/${mref}/remote?idx=0`);
+      const page = await membre.get(r.json.url);
+      assert.equal(page.status, 200, page.texte.slice(0, 200));
+      assert.equal(recus.at(-1), 'session-carte=ouverte', 'seul le cookie de la carte lui parvient');
+      assert.ok(recus.every(c => !/sentinel-/.test(c)), 'jamais la session de Sentinel');
+      assert.deepEqual(page.setCookie.map(c => c.split('=')[0]), ['session-carte'], 'la carte ne pose aucun cookie au nom du service');
+    } finally { membre.cookies.delete('session-carte'); }
+  } finally { await carte.fermer(); }
+});
+
 test('hôte sans agent (carte de gestion) et refus d\'URL interdite', async () => {
   const r = await membre.post('/api/hosts', { host: 'serveur-b', ip: '198.51.100.30', ctype: 'idrac', target: 'https://198.51.100.30', label: 'iDRAC' });
   assert.equal(r.status, 200, JSON.stringify(r.json));

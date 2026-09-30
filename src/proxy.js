@@ -21,6 +21,17 @@ const STRIP_REQUEST = new Set([
   'te', 'trailers', 'transfer-encoding', 'upgrade', 'accept-encoding',
 ]);
 
+// Les cookies de Sentinel (session, cérémonie) accompagnent chaque requête du
+// navigateur vers /console/ : ils ne partent jamais vers la carte, et la carte
+// ne peut pas en poser un du même nom. Les préfixes __Host- et __Secure- sont
+// réservés au service.
+export const COOKIES_DU_SERVICE = /^(?:__Host-|__Secure-)?sentinel-|^__(?:Host|Secure)-/i;
+
+export function cookiesPourLaCarte(entete) {
+  const gardes = String(entete || '').split(';').map(c => c.trim()).filter(c => c && !COOKIES_DU_SERVICE.test(c.split('=')[0].trim()));
+  return gardes.length ? gardes.join('; ') : null;
+}
+
 const RE_HEAD = /<head[^>]*>/i;
 const RE_ABS = /\b(src|href|action|data-src)\s*=\s*(["'])\/(?!\/)/gi;
 
@@ -69,6 +80,9 @@ export function mandaterHttp(req, res, { base, prefix, pin, corps }) {
   const secure = cible.protocol === 'https:';
   const entetes = {};
   for (const [k, v] of Object.entries(req.headers)) if (!STRIP_REQUEST.has(k.toLowerCase())) entetes[k] = v;
+  delete entetes.cookie;
+  const cookies = cookiesPourLaCarte(req.headers.cookie);
+  if (cookies) entetes.cookie = cookies;
   entetes.host = cible.host;
   if (hoteInterdit(cible.hostname)) { res.writeHead(403, { 'Content-Type': 'application/json' }); return res.end('{"error":"Adresse interdite."}'); }
   const opts = { method: req.method, headers: entetes, lookup: lookupGarde };
@@ -80,11 +94,11 @@ export function mandaterHttp(req, res, { base, prefix, pin, corps }) {
   const amontBase = `${cible.protocol}//${cible.host}`;
   const up = mod.request(cible, opts, ru => {
     const sortie = {};
-    const cookies = [];
+    const poses = [];
     for (const [k, v] of Object.entries(ru.headers)) {
       const low = k.toLowerCase();
       if (STRIP_RESPONSE.has(low)) {
-        if (low === 'set-cookie') for (const c of [].concat(v)) cookies.push(reecrireSetCookie(c, prefix));
+        if (low === 'set-cookie') for (const c of [].concat(v)) if (!COOKIES_DU_SERVICE.test(c.split('=')[0].trim())) poses.push(reecrireSetCookie(c, prefix));
         if (low === 'location') sortie.Location = reecrireLocation([].concat(v)[0], amontBase, prefix);
         continue;
       }
@@ -100,12 +114,12 @@ export function mandaterHttp(req, res, { base, prefix, pin, corps }) {
       ru.on('end', () => {
         const html = reecrireHtml(Buffer.concat(morceaux), prefix);
         sortie['Content-Length'] = Buffer.byteLength(html);
-        if (cookies.length) sortie['Set-Cookie'] = cookies;
+        if (poses.length) sortie['Set-Cookie'] = poses;
         res.writeHead(ru.statusCode, sortie);
         res.end(req.method === 'HEAD' ? undefined : html);
       });
     } else {
-      if (cookies.length) sortie['Set-Cookie'] = cookies;
+      if (poses.length) sortie['Set-Cookie'] = poses;
       res.writeHead(ru.statusCode, sortie);
       ru.pipe(res);
     }
