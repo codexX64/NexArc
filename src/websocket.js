@@ -101,6 +101,9 @@ export class Connexion {
     if (len === 126) { if (b.length < i + 2) return false; len = b.readUInt16BE(i); i += 2; }
     else if (len === 127) { if (b.length < i + 8) return false; const g = b.readBigUInt64BE(i); if (g > BigInt(MAX_TRAME)) throw new Error('trame démesurée'); len = Number(g); i += 8; }
     if (len > MAX_TRAME) throw new Error('trame démesurée');
+    // Trame de contrôle (fermeture, ping, pong) : jamais fragmentée, 125 octets
+    // au plus (RFC 6455 §5.5) ; un ping plus gros serait renvoyé tel quel.
+    if (opcode >= 0x8 && (!fin || len > 125)) throw new Error('trame de contrôle invalide');
     const entete = i + (masque ? 4 : 0);
     if (b.length < entete + len) return false;
     let charge;

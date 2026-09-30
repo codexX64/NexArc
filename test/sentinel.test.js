@@ -16,7 +16,7 @@ import { Coffre } from '../socle/src/chiffre.js';
 import { lookupGarde, hoteInterdit } from '../src/reseau.js';
 import { pont } from '../src/vncbridge.js';
 import { observer, agentEpingle } from '../src/tls.js';
-import { connecter } from '../src/websocket.js';
+import { connecter, Connexion } from '../src/websocket.js';
 import { paquetMagique, emettre, diffusionDirigee, sousReseau } from '../src/wol.js';
 import { urlBureau, nodeValide } from '../src/mesh.js';
 import https from 'node:https';
@@ -799,6 +799,24 @@ test('WebSocket : origine étrangère refusée, version non 13 refusée', async 
   // mise à niveau /vnc avec une origine étrangère → 403, sans session → 401
   const r = await brancherWs(s.port, '/vnc/AAAAAAAAAAAAAAAA/0', { origin: 'https://mechant.exemple.org' });
   assert.match(r, /403|401/);
+});
+
+test('WebSocket : trames de contrôle démesurées ou fragmentées refusées, jamais renvoyées', () => {
+  const trame = (octet0, charge) => {
+    const cle = crypto.randomBytes(4), masquee = Buffer.from(charge.map((o, k) => o ^ cle[k & 3]));
+    const tete = charge.length < 126 ? Buffer.from([octet0, 0x80 | charge.length]) : Buffer.from([octet0, 0x80 | 126, charge.length >> 8, charge.length & 0xff]);
+    return Buffer.concat([tete, cle, masquee]);
+  };
+  for (const [nom, t] of [['ping de 126 octets', trame(0x89, [...Buffer.alloc(126, 1)])], ['ping fragmenté', trame(0x09, [1, 2, 3])]]) {
+    const ecrits = [];
+    const socket = { on(evt, fn) { this[evt] = fn; }, write: b => ecrits.push(Buffer.from(b)), end() {}, destroy() { this.destroyed = true; }, setTimeout() {}, destroyed: false };
+    new Connexion(socket).on('texte', () => {});
+    socket.data(t);
+    assert.equal(ecrits.length, 1, nom);
+    assert.equal(ecrits[0][0], 0x88, `${nom} : fermeture, pas de pong`);
+    assert.equal(ecrits[0].readUInt16BE(2), 1002, `${nom} : erreur de protocole`);
+    assert.equal(socket.destroyed, true);
+  }
 });
 
 function attendre(cond, ms = 1500) {
