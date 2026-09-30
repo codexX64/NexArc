@@ -16,7 +16,7 @@ const STRIP_RESPONSE = new Set([
   'x-frame-options', 'content-security-policy', 'content-security-policy-report-only',
   'content-encoding', 'content-length', 'transfer-encoding', 'connection', 'keep-alive',
   'public-key-pins', 'strict-transport-security', 'set-cookie', 'location',
-  'cache-control', 'x-content-type-options', 'referrer-policy',
+  'cache-control', 'x-content-type-options', 'referrer-policy', 'permissions-policy', 'cross-origin-opener-policy',
 ]);
 const STRIP_REQUEST = new Set([
   'host', 'connection', 'keep-alive', 'proxy-authenticate', 'cookie2', 'proxy-authorization',

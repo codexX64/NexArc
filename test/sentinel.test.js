@@ -518,6 +518,8 @@ test('origine des consoles : la carte s\'affiche hors de l\'origine de Sentinel,
     assert.equal(page.entetes['x-frame-options'], undefined);
     assert.equal(page.entetes['x-content-type-options'], 'nosniff');
     assert.equal(page.entetes['cache-control'], 'no-store');
+    assert.match(page.entetes['permissions-policy'], /camera=\(\), microphone=\(\), geolocation=\(\).*fullscreen=\(self\)/, 'capacités fermées, sauf plein écran et presse-papiers');
+    assert.equal(page.entetes['cross-origin-opener-policy'], 'same-origin');
     assert.ok(page.texte.includes(`<base href="${u.pathname}"><script src="/reancrage.js" data-prefixe="${u.pathname}"></script>`), 'réancrage par un script servi, jamais en ligne');
     assert.ok(page.texte.includes(`<img src="${u.pathname}logo.png">`), 'liens absolus sous le préfixe');
     const script = await vitrine.get('/reancrage.js');

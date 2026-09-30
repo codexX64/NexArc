@@ -75,15 +75,20 @@ export class OrigineConsoles {
     return { ...p, base: item.target.replace(/\/+$/, ''), pin: item.pin || null };
   }
 
+  // Une console n'a besoin que du plein écran et du presse-papiers ; le reste
+  // des capacités du navigateur lui est fermé, quoi que la carte demande.
   entetes(res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=(), display-capture=(), fullscreen=(self), clipboard-read=(self), clipboard-write=(self)');
   }
 
   repondre(res, status, message) {
     if (res.headersSent) return res.destroy();
     this.entetes(res);
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ error: message }));
   }
