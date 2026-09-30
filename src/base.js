@@ -121,10 +121,9 @@ export class Parc {
     });
   }
 
+  // Les accès distants d'une machine ; une colonne illisible n'en donne aucun.
   consolesEffectives(m) {
-    let items = [];
-    try { items = m.consoles ? JSON.parse(m.consoles) : []; } catch { items = []; }
-    return items;
+    try { return m.consoles ? JSON.parse(m.consoles) : []; } catch { return []; }
   }
 
   machinePublique(m) {

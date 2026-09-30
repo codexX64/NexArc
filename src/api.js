@@ -184,7 +184,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     session(ctx, { role: 'membre' });
     const { idx } = await corps(ctx, S.acces);
     const m = parc.machine(machine(ctx.params.ref));
-    const items = consolesEffectives(m);
+    const items = parc.consolesEffectives(m);
     if (!items.length) throw new ErreurHttp(409, 'Aucun accès distant configuré pour cette machine.');
     if (idx >= items.length) throw new ErreurHttp(404, 'Accès introuvable.');
     const item = items[idx];
@@ -515,7 +515,6 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     return agents.codeValide(code) ? code : refuserPreuve(ctx, 'Code d\'inscription invalide ou expiré.');
   }
   function sessionSilencieuse(ctx) { try { portail.exiger(ctx, { role: 'membre' }); return true; } catch { return false; } }
-  function consolesEffectives(m) { try { return m.consoles ? JSON.parse(m.consoles) : []; } catch { return []; } }
   function baseUrl(ctx) {
     if (cfg.urlEnrolement) return cfg.urlEnrolement.replace(/\/+$/, '');
     return ctx.origine || `http://localhost:${cfg.port}`;
@@ -527,7 +526,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
       if (!/^https:/i.test(base)) throw new ErreurHttp(422, REDFISH_HTTPS);
       const u = new URL(base); return { host: u.hostname, port: Number(u.port) || 443, redfish: true };
     }
-    const item = consolesEffectives(m)[idx];
+    const item = parc.consolesEffectives(m)[idx];
     if (!item) throw new ErreurHttp(404, 'Console introuvable.');
     if (item.type === 'vnc') { const h = item.target.slice(0, item.target.lastIndexOf(':')); throw new ErreurHttp(422, `La console VNC ${h} n'utilise pas TLS : rien à épingler.`); }
     if (!/^https/i.test(item.target)) throw new ErreurHttp(422, 'Console non-TLS : rien à épingler.');
