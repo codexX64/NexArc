@@ -86,7 +86,11 @@ connexion pour un nom d'hôte (la résolution DNS est vérifiée).
 **Jetons d'agents.** Un jeton par agent, gardé seulement sous forme d'empreinte
 et comparé en temps constant. Le jeton en clair n'apparaît qu'une fois, à
 l'inscription. Il n'existe pas de jeton d'agent global. Un jeton se révoque
-sans perdre la machine (voir « Agents »).
+sans perdre la machine (voir « Agents »). Chaque code d'inscription, jeton
+d'agent ou jeton de service refusé compte pour l'adresse qui l'a présenté :
+dix échecs la bloquent une minute, puis par paliers jusqu'à une heure, à part
+du compteur des connexions humaines. Un agent dont le jeton est refusé se tait
+plus d'une heure avant de réessayer.
 
 Les clés d'accès n'existent que sur une page HTTPS. Sans HTTPS, `SOCLE_HTTP=1`
 ouvre un mode dégradé, affiché comme tel partout : réservé à un réseau de

@@ -54,14 +54,29 @@ const S = {
 // et vérifie que l'un et l'autre concordent.
 export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synapse, flux, racine, consoles }) {
   const r = new Routeur();
-  const { portail, journal } = socle;
+  const { portail, journal, limiteur } = socle;
   const debitReveil = new Debit({ max: 30 }), debitPower = new Debit({ max: 20 }), debitIngest = new Debit({ max: cfg.ingestMinute });
 
+  // Codes d'inscription, jetons d'agents et jeton du Hub : chaque échec compte
+  // pour l'adresse, qui se bloque par paliers (limiteur persistant du socle).
+  // Le compteur est à part de celui des connexions humaines : un poste révoqué
+  // qui insiste ne bloque pas les opérateurs derrière la même adresse.
+  const cleMachine = ctx => [`ip:machine:${ctx.ip}`];
+  const controlerEchecs = ctx => limiteur.controler(cleMachine(ctx));
+  const refuserPreuve = (ctx, message) => {
+    limiteur.echec(cleMachine(ctx));
+    journal.rare(`machine:${ctx.ip}`, { action: 'connexion.jeton', objet: ctx.url.pathname, ip: ctx.ip, resultat: 'refus' });
+    throw new ErreurHttp(401, message);
+  };
+
+  // Un jeton présenté est vérifié, et un faux compte comme un échec : il ne
+  // retombe jamais sur la session.
   const estHub = ctx => {
-    if (!cfg.jetonHub) return false;
     const h = String(ctx.req.headers.authorization || '');
     if (!h.startsWith('Bearer ')) return false;
-    return egal(h.slice(7), cfg.jetonHub);
+    controlerEchecs(ctx);
+    if (cfg.jetonHub && egal(h.slice(7), cfg.jetonHub)) return true;
+    return refuserPreuve(ctx, 'Jeton de service invalide.');
   };
   const session = (ctx, opts = {}) => portail.exiger(ctx, { role: 'lecture', ...opts });
   const machine = ref => parc.idDe(ref) ?? (() => { throw new ErreurHttp(404, 'Machine introuvable.'); })();
@@ -380,16 +395,16 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   // Échange du code contre le jeton d'agent (par l'agent lui-même).
   r.get('/api/enroll/config', ctx => {
+    controlerEchecs(ctx);
     const code = ctx.url.searchParams.get('code') || '';
     const r2 = agents.echanger(code);
-    if (!r2) throw new ErreurHttp(401, 'Code d\'inscription invalide, expiré ou déjà utilisé.');
+    if (!r2) refuserPreuve(ctx, 'Code d\'inscription invalide, expiré ou déjà utilisé.');
     return { token: r2.jeton, site: r2.site, name: r2.nom, relay: r2.relais, url: baseUrl(ctx) };
   }, { public: true, ecrit: true });
 
   r.get('/api/enroll/agent.py', ctx => {
     // Une session d'opérateur, ou un code d'inscription encore valide.
-    const code = ctx.url.searchParams.get('code') || '';
-    if (!agents.codeValide(code) && !sessionSilencieuse(ctx)) throw new ErreurHttp(401, 'Code d\'inscription invalide ou expiré.');
+    codeOuSession(ctx);
     const src = fs.readFileSync(path.join(racine, 'agent', 'sentinel-agent.py'), 'utf8');
     ctx.res.writeHead(200, { 'Content-Type': 'text/x-python; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="sentinel-agent.py"' });
     ctx.res.end(src);
@@ -397,8 +412,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   }, { public: true });
 
   r.get('/api/enroll/script', ctx => {
-    const code = ctx.url.searchParams.get('code') || '';
-    if (!agents.codeValide(code) && !sessionSilencieuse(ctx)) throw new ErreurHttp(401, 'Code d\'inscription invalide ou expiré.');
+    const code = codeOuSession(ctx);
     const os = ctx.url.searchParams.get('os') || 'linux';
     if (!Object.hasOwn(enroll.BUILDERS, os)) throw new ErreurHttp(404, 'Système non supporté.');
     const [builder, fichier, media] = enroll.BUILDERS[os];
@@ -418,23 +432,22 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   // ───────── agent : remontée, relève, résultat (jeton d'agent) ─────────
   r.post('/api/ingest', async ctx => {
     if (!debitIngest.prendre(ctx.ip)) throw new ErreurHttp(429, 'Trop de remontées.');
+    controlerEchecs(ctx);
     const jeton = String(ctx.req.headers['x-agent-token'] || '');
     const b = await corps(ctx, S.ingest, true);
     const res = agents.ingest(jeton, b);
-    if (res.erreur === 401) { journal.rare(`agent:${ctx.ip}`, { action: 'connexion.jeton', objet: '/api/ingest', ip: ctx.ip, resultat: 'refus' }); throw new ErreurHttp(401, 'Jeton d\'agent invalide.'); }
+    if (res.erreur === 401) refuserPreuve(ctx, 'Jeton d\'agent invalide.');
     if (res.erreur === 429) throw new ErreurHttp(429, 'Limite de machines atteinte.');
     return { ok: true };
   }, { public: true, ecrit: true });
 
   r.get('/api/agent/jobs', ctx => {
     const m = agentDe(ctx);
-    if (!m) throw new ErreurHttp(401, 'Jeton d\'agent invalide.');
     return taches.relever(m.id, cfg.delaiTache);
   }, { public: true });
 
   r.post('/api/agent/jobs/:ref/result', async ctx => {
     const m = agentDe(ctx);
-    if (!m) throw new ErreurHttp(401, 'Jeton d\'agent invalide.');
     const b = await corps(ctx, S.resultat, true);
     if (!taches.resultat(ctx.params.ref, m.id, b.output, b.rc)) throw new ErreurHttp(404, 'Tâche introuvable.');
     return { ok: true };
@@ -442,9 +455,17 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   // ───────── helpers ─────────
   function agentDe(ctx) {
-    const jeton = String(ctx.req.headers['x-agent-token'] || '');
-    const res = agents.resoudre(jeton);
-    return res && res.id ? res : null;
+    controlerEchecs(ctx);
+    const res = agents.resoudre(String(ctx.req.headers['x-agent-token'] || ''));
+    return res?.id ? res : refuserPreuve(ctx, 'Jeton d\'agent invalide.');
+  }
+  // Les fichiers d'inscription s'ouvrent à un opérateur (session membre) ou à
+  // qui tient un code encore valide ; rend le code demandé.
+  function codeOuSession(ctx) {
+    const code = ctx.url.searchParams.get('code') || '';
+    if (sessionSilencieuse(ctx)) return code;
+    controlerEchecs(ctx);
+    return agents.codeValide(code) ? code : refuserPreuve(ctx, 'Code d\'inscription invalide ou expiré.');
   }
   function sessionSilencieuse(ctx) { try { portail.exiger(ctx, { role: 'membre' }); return true; } catch { return false; } }
   function consolesEffectives(m) { try { return m.consoles ? JSON.parse(m.consoles) : []; } catch { return []; } }

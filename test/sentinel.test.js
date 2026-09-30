@@ -247,6 +247,26 @@ test('révocation d\'un jeton d\'agent : aussitôt refusé, tâches dues abandon
   assert.equal(refMachineParHote('poste-revoque'), mref, 'réinscrit, l\'agent retrouve sa machine');
 });
 
+test('codes et jetons de machine : chaque échec compte pour l\'adresse, bloquée après dix, à part des connexions humaines', async () => {
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-echecs-')));
+  try {
+    const c = x.client();
+    const machine = { origine: null };
+    const statuts = [
+      (await c.req('GET', '/api/summary', undefined, { ...machine, entetes: { authorization: 'Bearer jeton-du-hub-invente-pour-l-essai' } })).status,
+      (await c.get(`/api/enroll/config?code=${'A'.repeat(22)}`)).status,
+      (await c.get(`/api/enroll/agent.py?code=${'A'.repeat(22)}`)).status,
+      (await c.req('GET', '/api/agent/jobs', undefined, { ...machine, entetes: { 'x-agent-token': 'sag_jeton_invente' } })).status,
+    ];
+    for (let i = 0; i < 8; i++) statuts.push((await c.req('POST', '/api/ingest', { hostname: 'poste-x' }, { ...machine, entetes: { 'x-agent-token': 'sag_jeton_invente' } })).status);
+    assert.deepEqual(statuts, [...Array(10).fill(401), 429, 429]);
+    assert.equal((await c.req('GET', '/api/summary', undefined, { ...machine, entetes: { authorization: `Bearer ${JETON_HUB}` } })).status, 429, 'adresse bloquée : le bon jeton attend aussi');
+    assert.equal(x.db.prepare("SELECT COUNT(*) n FROM socle_journal WHERE action = 'limite.verrou' AND objet = 'ip:machine:127.0.0.1'").get().n, 1, 'verrou journalisé');
+    assert.ok(x.db.prepare("SELECT COUNT(*) n FROM socle_journal WHERE action = 'connexion.jeton'").get().n >= 1, 'échecs journalisés pour la vigie');
+    assert.equal((await c.post('/api/compte/connexion', { identifiant: 'personne', motDePasse: 'mauvaise phrase de passe' })).status, 401, 'les connexions humaines gardent leur propre compteur');
+  } finally { await x.arreter(); }
+});
+
 test('tâches : charge validée selon le type, réveil réservé à sa route (opérateur, automatisation ou Hub)', async () => {
   await enroler(membre, { hostname: 'poste-charges' });
   const mref = refMachineParHote('poste-charges');

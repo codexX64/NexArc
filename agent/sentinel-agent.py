@@ -49,6 +49,10 @@ except ImportError:
 KINDS = {'cmd', 'install', 'uninstall', 'inventory', 'update', 'wol'}
 PAQUET = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+:@/-]{0,120}$')
 SORTIE_MAX = 100_000
+# Un jeton refusé (révoqué, machine supprimée) ne redevient pas bon en
+# insistant : l'agent se tait plus d'une heure, le temps que le serveur oublie
+# ses échecs, et ne bloque pas l'adresse qu'il partage avec d'autres postes.
+ATTENTE_JETON_REFUSE = 65 * 60
 FP_SHA256 = re.compile(r'^[0-9a-f]{64}$')
 # Sorties des outils de posture en anglais : elles sont analysées, pas affichées.
 ENV_C = dict(os.environ, LC_ALL='C', LANG='C')
@@ -734,6 +738,8 @@ def boucle(cfg, a):
                 print('[sentinel-agent] ok  cpu=%s%% ram=%s%%' % (payload['cpu'], payload['ram']))
             elif r.status_code == 401:
                 print('[sentinel-agent] 401 — jeton refusé ; réinscription nécessaire.')
+                time.sleep(ATTENTE_JETON_REFUSE)
+                continue
             else:
                 print('[sentinel-agent] serveur %s' % r.status_code)
         except requests.RequestException as e:
