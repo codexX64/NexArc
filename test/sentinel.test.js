@@ -964,7 +964,7 @@ test('inscription : scripts Windows (Python + venv), Linux et macOS ; valeurs pi
   assert.equal(w.status, 200);
   assert.match(w.entetes['content-disposition'], /installer-sentinel\.ps1/);
   for (const attendu of [`$Code = '${info.code}'`, "$Site = 'Prod'", "$Nom = 'serveur-a'", 'function Find-Python', '*WindowsApps*', 'Python.Python.3.12',
-    '-m venv "$Dir\\venv"', 'requirements.txt?code=$Code', 'pip install -q --require-hashes --prefer-binary -r "$Dir\\requirements.txt"', 'sentinel-agent.py" --enroller', '$LASTEXITCODE -ne 0']) {
+    '-m venv "$Dir\\venv"', 'requirements.txt?code=$Code', 'icacls $Dir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"', 'pip install -q --require-hashes --prefer-binary -r "$Dir\\requirements.txt"', 'sentinel-agent.py" --enroller', '$LASTEXITCODE -ne 0']) {
     assert.ok(w.texte.includes(attendu), `script Windows : ${attendu}`);
   }
   for (const systeme of ['linux', 'macos']) {

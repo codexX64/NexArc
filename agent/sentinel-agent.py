@@ -607,12 +607,26 @@ def lire_config():
     return None
 
 
+# SYSTEM et Administrateurs par leur SID : les noms de groupe changent avec la
+# langue de Windows, pas les SID.
+ACL_WINDOWS = ['*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F']
+
+
+def restreindre_dossier():
+    """Le jeton va dans ce dossier : lisible par l'agent (root, SYSTEM) seul.
+    Sous Windows, un dossier de ProgramData hérite de la lecture pour tous les
+    utilisateurs ; chmod n'y peut rien, les ACL si."""
+    if IS_WIN:
+        rc, out = run(['icacls', CONFIG_DIR, '/inheritance:r', '/grant:r'] + ACL_WINDOWS, 30)
+        if rc != 0:
+            raise OSError('droits du dossier de l\'agent non posés : %s' % out.strip()[:200])
+    else:
+        os.chmod(CONFIG_DIR, 0o700)
+
+
 def ecrire_config(cfg):
     os.makedirs(CONFIG_DIR, exist_ok=True)
-    try:
-        os.chmod(CONFIG_DIR, 0o700)
-    except OSError:
-        pass
+    restreindre_dossier()
     tmp = CONFIG_FILE + '.tmp'
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, 'w') as f:
@@ -688,7 +702,10 @@ def bootstrap(a):
         cfg['pin'] = os.environ['SENTINEL_PIN']
     if os.environ.get('SENTINEL_CA'):
         cfg['ca'] = os.environ['SENTINEL_CA']
-    ecrire_config(cfg)
+    try:
+        ecrire_config(cfg)
+    except OSError as e:
+        sys.exit('jeton non rangé : %s' % e)
     print('→ Vérification de la remontée')
     headers = {'X-Agent-Token': token}
     payload = collect(site, nom, relais)

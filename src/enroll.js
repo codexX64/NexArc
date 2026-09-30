@@ -112,6 +112,10 @@ $PyArgs = if ((Split-Path $Py -Leaf) -eq "py.exe") { @("-3") } else { @() }
 Unregister-ScheduledTask -TaskName "SentinelAgent" -Confirm:$false -ErrorAction SilentlyContinue
 Write-Host "-> Agent dans $Dir"
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+# Le jeton de l'agent sera rangé ici : SYSTEM et les administrateurs seuls, sans
+# la lecture pour tous que ProgramData transmet par héritage.
+icacls $Dir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
+if ($LASTEXITCODE -ne 0) { Write-Error "Droits du dossier de l'agent non posés."; exit 1 }
 Invoke-WebRequest -Uri "$Url/api/enroll/agent.py?code=$Code" -OutFile "$Dir\\sentinel-agent.py" -UseBasicParsing
 Invoke-WebRequest -Uri "$Url/api/enroll/requirements.txt?code=$Code" -OutFile "$Dir\\requirements.txt" -UseBasicParsing
 & $Py @PyArgs -m venv "$Dir\\venv"

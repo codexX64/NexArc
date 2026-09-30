@@ -226,6 +226,19 @@ class Durcissement(unittest.TestCase):
         self.assertIsNone(agent.pkg_cmd('install', 'paquet; rm -rf /'))
         self.assertIsNone(agent.maj_cmd('$(id)'))
 
+    def test_dossier_windows_ferme_aux_utilisateurs_par_acl(self):
+        appels, avant = [], (agent.IS_WIN, agent.run, agent.CONFIG_DIR)
+        try:
+            agent.IS_WIN, agent.CONFIG_DIR = True, r'C:\ProgramData\SentinelAgent'
+            agent.run = lambda cmd, timeout=25, env=None: (appels.append(cmd), (0, ''))[1]
+            agent.restreindre_dossier()
+            self.assertEqual(appels, [['icacls', r'C:\ProgramData\SentinelAgent', '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F']])
+            agent.run = lambda cmd, timeout=25, env=None: (5, 'Accès refusé')
+            with self.assertRaises(OSError):
+                agent.restreindre_dossier()
+        finally:
+            agent.IS_WIN, agent.run, agent.CONFIG_DIR = avant
+
     def test_configuration_ecrite_en_0600(self):
         dossier = tempfile.mkdtemp(prefix='agent-conf-')
         avant = agent.CONFIG_DIR, agent.CONFIG_FILE
@@ -233,6 +246,7 @@ class Durcissement(unittest.TestCase):
             agent.CONFIG_DIR, agent.CONFIG_FILE = dossier, os.path.join(dossier, 'agent.json')
             agent.ecrire_config({'url': 'https://sentinel.exemple.org', 'token': 'sag_essai'})
             self.assertEqual(stat.S_IMODE(os.stat(agent.CONFIG_FILE).st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(os.stat(dossier).st_mode), 0o700)
         finally:
             agent.CONFIG_DIR, agent.CONFIG_FILE = avant
             shutil.rmtree(dossier, ignore_errors=True)

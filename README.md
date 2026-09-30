@@ -219,7 +219,9 @@ avec sa configuration en `0600`, et se pose en service.
   administrateur : `powershell -ExecutionPolicy Bypass -Command "irm '<commande>' | iex"`,
   ou le fichier `installer-sentinel.ps1` téléchargé depuis la même fenêtre. Le
   script cherche Python 3 (en écartant le raccourci du Microsoft Store), l'installe
-  par winget s'il manque, crée `%ProgramData%\SentinelAgent\venv`, y installe
+  par winget s'il manque, ferme `%ProgramData%\SentinelAgent` à SYSTEM et aux
+  administrateurs (le jeton y est rangé ; ProgramData, lui, est lisible par tous
+  les utilisateurs), crée `%ProgramData%\SentinelAgent\venv`, y installe
   `psutil` et `requests`, puis enrôle l'agent. C'est le chemin de la 1.1.0 ; le
   binaire autonome PyInstaller n'existe plus.
 
