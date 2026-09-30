@@ -471,6 +471,9 @@ test('une configuration invalide arrête le démarrage', async () => {
     await x.arreter();
     return 'démarré';
   };
+  const vide = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 's-')), 'socle_cle');
+  fs.writeFileSync(vide, '\n');
+  assert.match(await erreurDe({ SOCLE_CLE: '', SOCLE_CLE_FILE: vide }), /SOCLE_CLE_FILE/, 'secret vide : la clé n\'est jamais tirée dans le volume');
   for (const [variable, valeur] of [['SENTINEL_MESH_LOGIN_KEY', 'abcd'], ['SENTINEL_MESH_LOGIN_KEY', '0'.repeat(63)], ['SYNAPSE_JETON', 'court'], ['SYNAPSE_JETON', 'changeme-changeme-changeme']]) {
     assert.match(await erreurDe({ [variable]: valeur }), new RegExp(variable), `${variable}=${valeur}`);
   }

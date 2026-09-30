@@ -1,11 +1,17 @@
 // Configuration de Sentinel, lue et validée une fois au démarrage. Les
 // variables SOCLE_* (comptes, relais, clé maîtresse) sont lues par le socle.
 // Une valeur invalide arrête le processus avec la liste complète des erreurs.
+import fs from 'node:fs';
 import { lireConfig } from '../socle/src/index.js';
 
 export const VERSION = '2.0.0';
 
 export function lireConfigSentinel(env = process.env) {
+  // SOCLE_CLE_FILE posée dit « la clé vient d'un secret » : un fichier vide ne
+  // doit pas laisser le socle la tirer dans le volume, à côté de ce qu'elle scelle.
+  if (env.SOCLE_CLE_FILE && fs.existsSync(env.SOCLE_CLE_FILE) && !fs.readFileSync(env.SOCLE_CLE_FILE, 'utf8').trim()) {
+    throw Object.assign(new Error(`Configuration invalide :\n  - SOCLE_CLE_FILE (${env.SOCLE_CLE_FILE}) est vide : pose la clé maîtresse dans ce secret (README, « Installation seule »).`), { erreurs: ['SOCLE_CLE_FILE vide'] });
+  }
   return lireConfig({
     port: { env: 'PORT', type: 'entier', min: 0, max: 65535, defaut: 8090 },
     hote: { env: 'HOTE', type: 'chaine', defaut: '0.0.0.0' },

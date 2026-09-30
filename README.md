@@ -113,19 +113,28 @@ premier compte administrateur.
 
 ## Installation seule
 
+La clé maîtresse vit dans un secret Docker, hors du volume de données, lisible
+par l'utilisateur du conteneur (10001) seul : une copie du volume ne suffit pas
+à ouvrir ce qu'elle scelle. Garder une copie hors ligne de `secrets/socle_cle` :
+sans elle, une sauvegarde de la base ne rouvre ni les secrets TOTP ni les
+secrets d'appareils.
+
 ```bash
 cp .env.example .env
 # renseigner SENTINEL_HUB_TOKEN (openssl rand -hex 24)
+mkdir -p secrets && openssl rand -base64 32 > secrets/socle_cle && : > secrets/socle_cle_ancienne
+sudo chown 10001:10001 secrets/socle_cle secrets/socle_cle_ancienne && sudo chmod 400 secrets/socle_cle secrets/socle_cle_ancienne
 docker compose up -d --build
 docker compose logs sentinel | grep "Jeton d'installation"
 ```
 
 Ouvrir ensuite `http://<hôte>:8090`, coller le jeton, créer le compte et son
-second facteur. La clé maîtresse se pose en secret Docker (voir
-`docker-compose.yml`) ; sans elle, elle est créée dans le volume de données.
+second facteur. Un secret `socle_cle` vide arrête le démarrage : la clé n'est
+jamais tirée dans le volume quand `SOCLE_CLE_FILE` est posée.
 
 Sans Docker : Node 24.7 ou plus récent, puis `npm start` (aucune dépendance à
-installer).
+installer) ; sans `SOCLE_CLE` ni `SOCLE_CLE_FILE`, la clé est créée dans
+`DATA_DIR/cles`, ce qui ne convient qu'au développement.
 
 Vérifications : `npm test` (serveur, vrais serveurs HTTP, TLS, WebSocket et
 UDP simulés), `python3 -m unittest agent/test_agent.py` (agent : vérification
@@ -278,7 +287,7 @@ socle.
 | `SYNAPSE_URL` / `SYNAPSE_JETON` | mémoire du parc ; jamais le contenu d'une commande | — |
 | `DATA_DIR` | dossier de `sentinel.db` | `/app/data` |
 | `PORT` / `HOTE` | écoute | `8090` / `0.0.0.0` |
-| `SOCLE_CLE` | clé maîtresse, 32 octets en base64 ; vide : créée dans `DATA_DIR/cles` | — |
+| `SOCLE_CLE` | clé maîtresse, 32 octets en base64 (en conteneur : `SOCLE_CLE_FILE`, secret Docker) ; sans l'une ni l'autre : créée dans `DATA_DIR/cles` (développement) | — |
 | `SOCLE_CLE_ANCIENNE` | pendant une rotation seulement : la clé remplacée | — |
 | `SOCLE_HTTP` | `1` : mode dégradé sans HTTPS | `0` |
 | `SOCLE_PROXYS` | relais inverses de confiance (CIDR) | — |
