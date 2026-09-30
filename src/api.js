@@ -119,15 +119,17 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   };
   const machine = ref => parc.idDe(ref) ?? (() => { throw new ErreurHttp(404, 'Machine introuvable.'); })();
   const meshActif = () => !!cfg.meshUrl;
+  // L'état que l'interface redessine après chaque geste.
+  const etatParc = () => ({ ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() });
 
   // Corps validé (limite adaptée à l'inventaire d'un agent).
   const corps = async (ctx, schema, gros = false) => valider(await lireCorps(ctx.req, { limite: gros ? 512 * 1024 : 64 * 1024 }), schema);
 
   r.get('/api/health', ctx => repondreJson(ctx.res, 200, { ok: true }), { public: true });
 
-  r.get('/api/state', ctx => { if (!estHub(ctx)) session(ctx); return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() }; }, { hub: true, role: 'lecture' });
+  r.get('/api/state', ctx => { if (!estHub(ctx)) session(ctx); return etatParc(); }, { hub: true, role: 'lecture' });
   r.get('/api/summary', ctx => { if (!estHub(ctx)) session(ctx); return parc.resume(); }, { hub: true, role: 'lecture' });
-  r.post('/api/collect', ctx => { session(ctx, { role: 'membre' }); for (const l of agents.collecter()) flux.pousser({ t: 'flux', ...l }); return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() }; }, { role: 'membre' });
+  r.post('/api/collect', ctx => { session(ctx, { role: 'membre' }); for (const l of agents.collecter()) flux.pousser({ t: 'flux', ...l }); return etatParc(); }, { role: 'membre' });
 
   // Flux d'activité en direct (SSE), à la place du sondage de la 1.x.
   r.get('/api/activite', ctx => {
@@ -143,7 +145,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   r.post('/api/alerts/:ref/ack', ctx => {
     const s = session(ctx, { role: 'membre' });
     if (!alertes.acquitter(ctx.params.ref, { identifiant: s.compteLigne.identifiant, compte: s.compte })) throw new ErreurHttp(404, 'Alerte introuvable.');
-    return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
+    return etatParc();
   }, { role: 'membre' });
 
   r.get('/api/machines/:ref/software', ctx => {
@@ -214,7 +216,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     let items; try { items = normaliser(b.consoles, nodeValide); } catch (e) { throw new ErreurHttp(422, e.message); }
     parc.enregistrerConsoles(id, items);
     journal.ecrire({ acteur: ctx.session.compte, action: 'consoles.modifiees', objet: parc.machine(id).host, ip: ctx.ip, details: { n: items.length, types: items.map(c => c.type).join(',') } });
-    return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
+    return etatParc();
   }, { role: 'admin' });
 
   r.put('/api/machines/:ref/mesh-node', async ctx => {
@@ -225,7 +227,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if (node && !nodeValide(node)) throw new ErreurHttp(422, 'Nœud MeshCentral invalide.');
     db.prepare('UPDATE machines SET mesh_node = ? WHERE id = ?').run(node || null, id);
     journal.ecrire({ acteur: ctx.session.compte, action: 'mesh.noeud', objet: parc.machine(id).host, ip: ctx.ip });
-    return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
+    return etatParc();
   }, { role: 'admin' });
 
   // GET montre l'empreinte et le sujet ; POST la confirme et l'épingle. Les deux
@@ -267,7 +269,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if ((b.user || b.password) && !b.password) throw new ErreurHttp(422, 'Mot de passe requis.');
     parc.poserRedfish(id, { url, user: b.user, password: b.password });
     journal.ecrire({ acteur: ctx.session.compte, action: 'redfish.identifiants', objet: parc.machine(id).host, ip: ctx.ip });
-    return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
+    return etatParc();
   }, { role: 'admin' });
   r.get('/api/machines/:ref/power', async ctx => {
     session(ctx, { role: 'membre' });
@@ -300,7 +302,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     db.prepare(`INSERT INTO machines(ref, host, ip, site, os, oskind, role, source, consoles, last_report, cree)
       VALUES(?,?,?,?,?,?,?,'kvm',?,?,?)`).run(ref, b.host, b.ip || '—', b.site || 'Matériel', 'Carte d\'administration', 'hw', 'matériel', JSON.stringify(items), Date.now() / 1000, Date.now() / 1000);
     journal.ecrire({ acteur: ctx.session.compte, action: 'machine.ajoutee', objet: b.host, ip: ctx.ip, details: { type: b.ctype } });
-    return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
+    return etatParc();
   }, { role: 'admin' });
 
   r.del('/api/machines/:ref', ctx => {
@@ -309,7 +311,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const m = parc.machine(id);
     parc.supprimer(id);
     journal.ecrire({ acteur: ctx.session.compte, action: 'machine.supprimee', objet: m.host, ip: ctx.ip });
-    return { ...parc.etat(), intervalle: cfg.intervalle, mesh_enabled: meshActif() };
+    return etatParc();
   }, { role: 'admin' });
 
   r.get('/api/relays', ctx => { session(ctx); return { coverage: couverture() }; }, { role: 'lecture' });
