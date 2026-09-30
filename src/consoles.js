@@ -30,10 +30,10 @@ export const TYPES = {
     note: 'Toute interface d\'administration web.' },
 };
 
-export const MAX_CONSOLES = 8;
+const MAX_CONSOLES = 8;
 
 // hôte:port pour une cible VNC ; hôte = IP ou nom, port 1..65535.
-export function hostPortValide(cible) {
+function hostPortValide(cible) {
   if (typeof cible !== 'string' || !cible.includes(':')) return false;
   const i = cible.lastIndexOf(':');
   const host = cible.slice(0, i).trim(), port = cible.slice(i + 1);
@@ -42,7 +42,7 @@ export function hostPortValide(cible) {
   return Number.isInteger(p) && p >= 1 && p <= 65535;
 }
 
-export function urlValide(url) {
+function urlValide(url) {
   let u;
   try { u = new URL(url); } catch { return false; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
@@ -54,7 +54,7 @@ export function urlValide(url) {
 
 // L'hôte d'une cible ne doit jamais viser des métadonnées de nuage, un lien
 // local ni une plage réservée — même saisi par un administrateur.
-export function hostDe(cible) {
+function hostDe(cible) {
   try {
     if (hostPortValide(cible)) return cible.slice(0, cible.lastIndexOf(':')).trim();
     return new URL(cible).hostname.replace(/^\[|\]$/g, '');
@@ -68,7 +68,7 @@ export function cibleInterdite(cible) {
   return /^[0-9a-f:.]+$/i.test(h) && classer(h) === 'interdite';
 }
 
-export function nettoyerLabel(label, ctype) {
+function nettoyerLabel(label, ctype) {
   let l = String(label || '').trim().slice(0, 40);
   l = [...l].filter(ch => ch.charCodeAt(0) >= 32).join('');
   return l || TYPES[ctype]?.label || 'Console';

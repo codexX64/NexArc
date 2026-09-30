@@ -12,8 +12,8 @@
 // ni PowerShell n'interprètent rien.
 const q = s => encodeURIComponent(s);
 
-export const CODE_INSCRIPTION = /^[A-Za-z0-9_-]{22}$/;
-export const LIBELLE = /^[\p{L}\p{N} ._()-]{0,60}$/u;
+const CODE_INSCRIPTION = /^[A-Za-z0-9_-]{22}$/;
+const LIBELLE = /^[\p{L}\p{N} ._()-]{0,60}$/u;
 const BASE = /^https?:\/\/(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+)(:\d{1,5})?(\/[A-Za-z0-9._~/-]*)?$/;
 
 // Refuse ce qui ne peut pas entrer tel quel dans un script (renvoie un message).
@@ -27,7 +27,7 @@ export function controler(base, { code = null, site = '', nom = '' } = {}) {
 
 const base$ = b => b.replace(/\/+$/, '');
 
-export function scriptLinux(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
+function scriptLinux(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
   return `#!/usr/bin/env bash
 # Sentinel — installation de l'agent (Linux, systemd). Lance avec sudo.
 set -euo pipefail
@@ -51,7 +51,7 @@ echo "✓ Terminé — le poste doit apparaître dans la console sous une minute
 `;
 }
 
-export function scriptMacos(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
+function scriptMacos(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
   return `#!/usr/bin/env bash
 # Sentinel — installation de l'agent (macOS, launchd). Lance avec sudo.
 set -euo pipefail
@@ -75,7 +75,7 @@ echo "✓ Terminé — le poste doit apparaître dans la console sous une minute
 // environnement virtuel dans ProgramData, puis l'agent s'enrôle et se pose en
 // tâche planifiée SYSTEM au démarrage. Une commande native qui échoue ne lève
 // rien en PowerShell : chaque étape vérifie $LASTEXITCODE.
-export function scriptWindows(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
+function scriptWindows(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
   return `# Sentinel - installation de l'agent (Windows). PowerShell en administrateur :
 #   powershell -ExecutionPolicy Bypass -File .\\installer-sentinel.ps1
 $ErrorActionPreference = "Stop"

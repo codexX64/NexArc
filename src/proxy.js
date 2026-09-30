@@ -28,9 +28,9 @@ const STRIP_REQUEST = new Set([
 // cérémonie). Ils ne partent jamais vers la carte, et la carte ne peut pas en
 // poser un du même nom. Les préfixes __Host- et __Secure- sont réservés au
 // service.
-export const COOKIES_DU_SERVICE = /^(?:__Host-|__Secure-)?sentinel-|^__(?:Host|Secure)-/i;
+const COOKIES_DU_SERVICE = /^(?:__Host-|__Secure-)?sentinel-|^__(?:Host|Secure)-/i;
 
-export function cookiesPourLaCarte(entete) {
+function cookiesPourLaCarte(entete) {
   const gardes = String(entete || '').split(';').map(c => c.trim()).filter(c => c && !COOKIES_DU_SERVICE.test(c.split('=')[0].trim()));
   return gardes.length ? gardes.join('; ') : null;
 }
@@ -42,7 +42,7 @@ const RE_ABS = /\b(src|href|action|data-src)\s*=\s*(["'])\/(?!\/)/gi;
 // construit à l'exécution, par le script de réancrage (web/reancrage.js), que
 // l'origine des consoles sert elle-même. Le préfixe n'est fait que de
 // caractères base64url : il entre tel quel dans l'attribut.
-export function reecrireHtml(body, prefix) {
+function reecrireHtml(body, prefix) {
   const p = prefix.replace(/\/$/, '');
   let s = body.toString('utf8').replace(RE_ABS, (_m, a, q) => `${a}=${q}${p}/`);
   const tete = `<base href="${prefix}"><script src="/reancrage.js" data-prefixe="${prefix}"></script>`;
@@ -50,7 +50,7 @@ export function reecrireHtml(body, prefix) {
   return Buffer.from(m ? s.slice(0, m.index + m[0].length) + tete + s.slice(m.index + m[0].length) : tete + s, 'utf8');
 }
 
-export function reecrireSetCookie(valeur, prefix) {
+function reecrireSetCookie(valeur, prefix) {
   const parts = valeur.split(';').map(p => p.trim());
   const out = [parts[0]];
   let aPath = false;
@@ -65,13 +65,13 @@ export function reecrireSetCookie(valeur, prefix) {
   return out.join('; ');
 }
 
-export function reecrireLocation(valeur, amont, prefix) {
+function reecrireLocation(valeur, amont, prefix) {
   if (valeur.startsWith(amont)) return prefix.replace(/\/$/, '') + valeur.slice(amont.length);
   if (valeur.startsWith('/')) return prefix.replace(/\/$/, '') + valeur;
   return valeur;
 }
 
-export function cibleAmont(base, chemin, query) {
+function cibleAmont(base, chemin, query) {
   const url = base.replace(/\/+$/, '') + (chemin ? '/' + chemin : '/');
   return url + (query ? '?' + query : '');
 }
@@ -132,5 +132,3 @@ export function mandaterHttp(req, res, { base, reste, prefix, pin, corps, parent
   up.on('error', () => { if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'application/json' }); res.end('{"error":"Console injoignable."}'); } });
   if (corps && corps.length) up.end(corps); else up.end();
 }
-
-export { STRIP_REQUEST, STRIP_RESPONSE };

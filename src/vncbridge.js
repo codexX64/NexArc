@@ -112,4 +112,4 @@ export async function pont(ws, host, port, { motDePasse = '', connexionTimeout =
   }
 }
 
-export { reponseVnc, desRfb };
+export { reponseVnc };

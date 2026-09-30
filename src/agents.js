@@ -221,5 +221,3 @@ export class Agents {
     return lignes;
   }
 }
-
-export { hashJeton, hashCode };

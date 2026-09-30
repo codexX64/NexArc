@@ -92,8 +92,6 @@ export function ouvrirBase(dossier) {
   return db;
 }
 
-const echappeLike = s => s.replace(/[\\%_]/g, c => '\\' + c);
-
 // Plusieurs écritures qui vont ensemble : toutes ou aucune. Appelée au sein
 // d'une transaction déjà ouverte, elle en fait partie.
 export function transaction(db, fn) {
@@ -366,4 +364,4 @@ export class Parc {
   }
 }
 
-export { secondes, echappeLike };
+export { secondes };

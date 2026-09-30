@@ -19,7 +19,6 @@ export const ACTIONS = {
   redemarrer: ['ForceRestart', 'GracefulRestart'],
   cycle: ['PowerCycle', 'ForceRestart'],
 };
-export const LIBELLES = { on: 'Allumer', off: 'Éteindre (forcé)', arret: 'Arrêter proprement', redemarrer: 'Redémarrer', cycle: 'Cycle d\'alimentation' };
 
 function requete(base, chemin, { user, password, pin, methode = 'GET', corps = null, timeout = 20000 } = {}) {
   const u = new URL(base.replace(/\/+$/, '') + chemin);

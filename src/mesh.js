@@ -17,7 +17,7 @@ export function nodeValide(node) {
   return typeof node === 'string' && node.length > 0 && node.length <= 200 && ![...node].some(c => INTERDITS.has(c));
 }
 
-export function jetonConnexion(user, cleHex, ttl = 60) {
+function jetonConnexion(user, cleHex, ttl = 60) {
   const cle = Buffer.from(cleHex, 'hex').subarray(0, 32);
   if (cle.length !== 32) throw new Error('clé de connexion Mesh invalide (32 octets hex attendus)');
   const iv = crypto.randomBytes(12);

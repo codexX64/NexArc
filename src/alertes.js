@@ -15,7 +15,7 @@ import { nouvelleRef, secondes, transaction } from './base.js';
 const GARDE_RESOLUES_J = 30;
 
 // Seuils : lus dans la configuration (SENTINEL_ALERT_*), voir config.js.
-export const REGLES = {
+const REGLES = {
   'hors-ligne': { sev: 'crit', libelle: 'Machine hors ligne' },
   antivirus: { sev: 'crit', libelle: 'Antivirus absent ou inactif' },
   'pare-feu': { sev: 'warn', libelle: 'Pare-feu inactif' },

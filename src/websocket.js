@@ -49,7 +49,6 @@ export function refuser(socket, code = 400, message = 'Bad Request') {
 // Réalise la poignée de main (101) et rend une Connexion. sousProtocole : celui
 // offert par le client que l'on accepte (ex. « binary » pour noVNC).
 export function accepter(req, socket, { sousProtocole = null } = {}) {
-  const v = verifierUpgrade(req, {});
   const entetes = [
     'HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade',
     `Sec-WebSocket-Accept: ${accept(req.headers['sec-websocket-key'])}`,
@@ -238,5 +237,3 @@ function pinCorrespond(cert, fp) {
   const a = norme(cert?.fingerprint256), b = norme(fp);
   return a === b && a.length > 15;
 }
-
-export { accept, MAX_TRAME, MAX_MESSAGE };
