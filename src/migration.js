@@ -13,7 +13,7 @@
 // et identifiants Redfish, scellés en 1.x sous une clé qui n'existe plus, ne
 // sont pas repris : l'URL et l'utilisateur restent, l'admin ressaisit le secret.
 import { normaliseIdentifiant } from '../socle/src/comptes.js';
-import { nouvelleRef, secondes } from './base.js';
+import { nouvelleRef, secondes, transaction } from './base.js';
 import { TYPES } from './consoles.js';
 
 const existe = (db, t) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
@@ -49,8 +49,7 @@ export function migrerParc({ db, log = console }) {
   const lire = c => (cols.has(c) ? c : 'NULL');
   const anciens = db.prepare("SELECT * FROM agents WHERE source IN ('agent','kvm')").all();
   const idParAncien = new Map();
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  transaction(db, () => {
     for (const a of anciens) {
       const ref = nouvelleRef();
       const consoles = nettoyerConsoles(a.consoles);
@@ -103,8 +102,7 @@ export function migrerParc({ db, log = console }) {
     for (const t of ['agents', 'alerts', 'automations', 'jobs', 'enroll_codes', 'feed', 'users', 'patches', 'vulns', 'autos', 'tgs', 'auth', 'meta']) {
       if (existe(db, t)) db.exec(`DROP TABLE ${t}`);
     }
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  });
   log.info?.(`[migration] ${anciens.length} machine(s) de la 1.x reprises. Les agents se réenrôlent une fois ; identifiants VNC/Redfish à ressaisir.`);
   return anciens.length;
 }
@@ -116,11 +114,11 @@ export function migrerParc({ db, log = console }) {
 // URL dans une iframe.
 function nettoyerConsoles(brut) {
   if (!brut) return null;
-  let items; try { items = JSON.parse(brut); } catch { return null; }
-  if (!Array.isArray(items)) return null;
-  const out = items.map(({ vncpw_enc, vncpw, ...reste }) => {
+  let lues; try { lues = JSON.parse(brut); } catch { return null; }
+  if (!Array.isArray(lues)) return null;
+  const reprises = lues.map(({ vncpw_enc, vncpw, ...reste }) => {
     const type = String(reste.type || '').toLowerCase();
     return { ...reste, type: TYPES[type] ? type : 'hyperviseur' };
   });
-  return JSON.stringify(out);
+  return JSON.stringify(reprises);
 }
