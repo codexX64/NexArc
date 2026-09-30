@@ -683,6 +683,25 @@ test('SYNAPSE informé des enrôlements et des tâches (jamais le contenu sensib
   assert.ok(syn.evenements.every(e => !JSON.stringify(e).includes('motdepasse')), 'aucun secret raconté');
 });
 
+test('SYNAPSE : une redirection n\'est jamais suivie, le jeton ne part qu\'à l\'adresse configurée', async () => {
+  const ailleurs = [];
+  const piege = http.createServer((req, res) => { ailleurs.push(req.headers.authorization || ''); res.end('{}'); });
+  const redirige = http.createServer((req, res) => { req.resume(); res.writeHead(307, { location: `http://127.0.0.1:${piege.address().port}/v1/ingest/batch` }); res.end(); });
+  await new Promise(r => piege.listen(0, '127.0.0.1', r));
+  await new Promise(r => redirige.listen(0, '127.0.0.1', r));
+  try {
+    const { Synapse } = await import('../src/synapse.js');
+    const x = new Synapse({ url: `http://127.0.0.1:${redirige.address().port}`, jeton: JETON_SYNAPSE, log: SILENCE });
+    x.raconter('essai', 'Un événement');
+    clearTimeout(x.minuterie);
+    await x.vider();
+    clearTimeout(x.minuterie);
+    assert.deepEqual(ailleurs, [], 'rien n\'atteint la cible de la redirection');
+    assert.equal(x.etat.echecs, 1);
+    assert.equal(x.file.length, 1, 'l\'événement reste dans la file');
+  } finally { await new Promise(r => piege.close(r)); await new Promise(r => redirige.close(r)); }
+});
+
 test('migration 1.1.0 : comptes, machines, automatisations reprises ; l\'agent se réenrôle par son nom', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-v1-'));
   const db = new DatabaseSync(path.join(dossier, 'sentinel.db'));

@@ -30,7 +30,8 @@ export class Synapse {
   async vider() {
     const lot = this.file.slice(0, LOT);
     try {
-      const r = await fetch(`${this.url}/v1/ingest/batch`, { method: 'POST', headers: { 'Content-Type': 'application/json', authorization: `Bearer ${this.jeton}` }, body: JSON.stringify({ events: lot }), signal: AbortSignal.timeout(15000) });
+      // Aucune redirection suivie : le jeton ne part qu'à l'adresse configurée.
+      const r = await fetch(`${this.url}/v1/ingest/batch`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', authorization: `Bearer ${this.jeton}` }, body: JSON.stringify({ events: lot }), signal: AbortSignal.timeout(15000) });
       if (!r.ok) throw new Error(`SYNAPSE ${r.status}`);
       this.file.splice(0, lot.length);
       Object.assign(this.etat, { envoyes: this.etat.envoyes + lot.length, dernierEnvoi: new Date().toISOString(), erreur: null });
