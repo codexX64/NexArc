@@ -56,18 +56,20 @@ export function observer(host, port, { timeout = 8000 } = {}) {
   });
 }
 
-// Agent HTTPS épinglé : le certificat épinglé est l'unique autorité, et la
-// feuille présentée doit avoir exactement l'empreinte confirmée.
-export function agentEpingle({ fp, pem }) {
+// Identité d'une carte épinglée, pour checkServerIdentity : la feuille
+// présentée doit avoir exactement l'empreinte confirmée. Le nom n'est pas
+// vérifié : l'empreinte épinglée EST l'identité.
+export function identiteEpinglee(fp) {
   const attendue = empreinte(fp);
-  return new https.Agent({
-    ca: [pem],
-    rejectUnauthorized: true,
-    checkServerIdentity: (_hote, cert) => {
-      if (empreinte(cert) !== attendue) return new Error('empreinte du certificat différente de celle épinglée');
-      return undefined; // le nom n'est pas vérifié : l'empreinte épinglée EST l'identité
-    },
-  });
+  return (_hote, cert) => {
+    const vue = empreinte(cert);
+    return vue === attendue && vue !== empreinte('') ? undefined : new Error('empreinte du certificat différente de celle épinglée');
+  };
+}
+
+// Agent HTTPS épinglé : le certificat épinglé est l'unique autorité.
+export function agentEpingle({ fp, pem }) {
+  return new https.Agent({ ca: [pem], rejectUnauthorized: true, checkServerIdentity: identiteEpinglee(fp) });
 }
 
 function derVersPem(raw) {

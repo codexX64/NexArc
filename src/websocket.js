@@ -14,6 +14,7 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import tls from 'node:tls';
 import { hoteInterdit, lookupGarde } from './reseau.js';
+import { identiteEpinglee } from './tls.js';
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const MAX_TRAME = 4 * 1024 * 1024;      // une trame de plus de 4 Mio n'est pas un flux normal
@@ -222,7 +223,7 @@ export function connecter(urlStr, { pin = null, entetes = {}, timeout = 15000 } 
     const ouvrir = () => { socket.write(lignes.join('\r\n') + '\r\n\r\n'); socket.on('data', surDonnees); };
     if (wss) {
       const opts = { host: url.hostname, port, servername: net.isIP(url.hostname) ? undefined : url.hostname, timeout, lookup: lookupGarde };
-      if (pin) { opts.ca = [pin.pem]; opts.rejectUnauthorized = true; opts.checkServerIdentity = (_h, cert) => (pinCorrespond(cert, pin.fp) ? undefined : new Error('empreinte différente de celle épinglée')); }
+      if (pin) Object.assign(opts, { ca: [pin.pem], rejectUnauthorized: true, checkServerIdentity: identiteEpinglee(pin.fp) });
       socket = tls.connect(opts, ouvrir);
     } else {
       socket = net.connect({ host: url.hostname, port, timeout, lookup: lookupGarde }, ouvrir);
@@ -230,10 +231,4 @@ export function connecter(urlStr, { pin = null, entetes = {}, timeout = 15000 } 
     socket.once('error', surErreur);
     socket.once('timeout', () => surErreur(new Error('délai dépassé')));
   });
-}
-
-function pinCorrespond(cert, fp) {
-  const norme = x => 'sha256:' + String(x || '').replace(/^\s*sha-?256\s*[:=]?\s*/i, '').replace(/[^0-9a-fA-F]/g, '').toLowerCase();
-  const a = norme(cert?.fingerprint256), b = norme(fp);
-  return a === b && a.length > 15;
 }
