@@ -26,6 +26,9 @@ export function ouvrirBase(dossier) {
   for (const f of [fichier, fichier + '-wal', fichier + '-shm']) if (fs.existsSync(f)) fs.chmodSync(f, 0o600);
   const db = new DatabaseSync(fichier);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA synchronous = NORMAL;');
+  // Les premières bases de la 2.0 gardaient les codes d'inscription en clair ;
+  // un code ne vaut qu'une heure, la table repart vide sous sa forme hachée.
+  if (db.prepare("SELECT 1 FROM pragma_table_info('enrolements') WHERE name = 'code'").get()) db.exec('DROP TABLE enrolements');
   db.exec(`
     CREATE TABLE IF NOT EXISTS machines(
       id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT NOT NULL UNIQUE,
@@ -71,7 +74,7 @@ export function ouvrirBase(dossier) {
     CREATE UNIQUE INDEX IF NOT EXISTS autos_ref ON automatisations(ref);
 
     CREATE TABLE IF NOT EXISTS enrolements(
-      code TEXT PRIMARY KEY, expire REAL NOT NULL, site TEXT NOT NULL DEFAULT 'Agents',
+      empreinte TEXT PRIMARY KEY, expire REAL NOT NULL, site TEXT NOT NULL DEFAULT 'Agents',
       nom TEXT DEFAULT '', relais INTEGER NOT NULL DEFAULT 0, cree REAL NOT NULL);
 
     -- Jeton d'un agent minté à l'échange d'un code, en attente de sa première

@@ -179,6 +179,10 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
 
 test('agent : code d\'inscription à usage unique, remontée, relève et résultat de SES tâches seulement', async () => {
   const info = (await membre.get('/api/enroll/info?site=Prod')).json;
+  assert.match(info.code, /^[A-Za-z0-9_-]{22}$/, 'code de 128 bits');
+  const empreinte = crypto.createHash('sha256').update('inscription:' + info.code).digest('hex');
+  assert.deepEqual(s.parc.db.prepare('SELECT empreinte FROM enrolements').all().map(r => r.empreinte).filter(e => e === empreinte), [empreinte], 'gardé par son empreinte');
+  assert.equal(s.parc.db.prepare('SELECT COUNT(*) n FROM enrolements WHERE empreinte = ?').get(info.code).n, 0, 'jamais en clair');
   const conf = (await membre.get(`/api/enroll/config?code=${info.code}`)).json;
   assert.match(conf.token, /^sag_/);
   assert.equal((await membre.get(`/api/enroll/config?code=${info.code}`)).status, 401, 'code consommé : usage unique');
@@ -442,6 +446,19 @@ test('migration 1.1.0 : comptes, machines, automatisations reprises ; l\'agent s
     // le réenrôlement d'un agent legacy le rattache à sa machine par le nom d'hôte
     const info = (await new Client(v1.port).get('/api/enroll/info')).status; void info;
   } finally { await v1.arreter(); }
+});
+
+test('base des premières 2.0 : codes d\'inscription en clair écartés, table reprise sous sa forme hachée', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-codes-'));
+  const db = new DatabaseSync(path.join(dossier, 'sentinel.db'));
+  db.exec("CREATE TABLE enrolements(code TEXT PRIMARY KEY, expire REAL NOT NULL, site TEXT NOT NULL DEFAULT 'Agents', nom TEXT DEFAULT '', relais INTEGER NOT NULL DEFAULT 0, cree REAL NOT NULL)");
+  db.prepare('INSERT INTO enrolements(code, expire, cree) VALUES(?,?,?)').run('codeenclairdunevieillebase', Date.now() / 1000 + 3600, Date.now() / 1000);
+  db.close();
+  const x = await lancer(dossier);
+  try {
+    assert.deepEqual(x.db.prepare("SELECT name FROM pragma_table_info('enrolements')").all().map(c => c.name).slice(0, 2), ['empreinte', 'expire']);
+    assert.equal(x.db.prepare('SELECT COUNT(*) n FROM enrolements').get().n, 0);
+  } finally { await x.arreter(); }
 });
 
 test('une configuration invalide arrête le démarrage', async () => {

@@ -17,6 +17,9 @@ const CODE_TTL_MS = 60 * 60e3;       // un code d'inscription vaut une heure
 const JETON_TTL_MS = 24 * 3600e3;    // un jeton minté attend une remontée un jour
 
 const hashJeton = t => sha256hex('agent:' + t);
+// Un code d'inscription n'est gardé que par son empreinte : une lecture de la
+// base ne donne rien à échanger.
+const hashCode = c => sha256hex('inscription:' + c);
 
 export class Agents {
   constructor(db, { parc, maxMachines, synapse, flux, alertes = null }) {
@@ -32,10 +35,10 @@ export class Agents {
   // ---- codes d'inscription ----
   nouveauCode({ site = 'Agents', nom = '', relais = false }) {
     this.purger();
-    const code = crypto.randomBytes(9).toString('base64url'); // court : tient dans un nom de fichier
+    const code = crypto.randomBytes(16).toString('base64url');
     const t = secondes();
-    this.db.prepare('INSERT INTO enrolements(code, expire, site, nom, relais, cree) VALUES(?,?,?,?,?,?)')
-      .run(code, t + CODE_TTL_MS / 1000, site.slice(0, 40) || 'Agents', nom.slice(0, 60), relais ? 1 : 0, t);
+    this.db.prepare('INSERT INTO enrolements(empreinte, expire, site, nom, relais, cree) VALUES(?,?,?,?,?,?)')
+      .run(hashCode(code), t + CODE_TTL_MS / 1000, site.slice(0, 40) || 'Agents', nom.slice(0, 60), relais ? 1 : 0, t);
     return { code, expire_dans: CODE_TTL_MS / 1000 };
   }
 
@@ -44,9 +47,10 @@ export class Agents {
   echanger(code) {
     if (typeof code !== 'string' || code.length > 40) return null;
     const t = secondes();
-    const l = this.db.prepare('SELECT * FROM enrolements WHERE code = ?').get(code);
-    if (!l || l.expire < t) { if (l) this.db.prepare('DELETE FROM enrolements WHERE code = ?').run(code); return null; }
-    this.db.prepare('DELETE FROM enrolements WHERE code = ?').run(code); // consommé
+    const h = hashCode(code);
+    const l = this.db.prepare('SELECT * FROM enrolements WHERE empreinte = ?').get(h);
+    if (!l || l.expire < t) { if (l) this.db.prepare('DELETE FROM enrolements WHERE empreinte = ?').run(h); return null; }
+    this.db.prepare('DELETE FROM enrolements WHERE empreinte = ?').run(h); // consommé
     const jeton = 'sag_' + crypto.randomBytes(24).toString('base64url');
     this.db.prepare('INSERT INTO jetons_attente(jeton_hash, site, nom, relais, expire, cree) VALUES(?,?,?,?,?,?)')
       .run(hashJeton(jeton), l.site, l.nom, l.relais, t + JETON_TTL_MS / 1000, t);
@@ -55,7 +59,7 @@ export class Agents {
 
   codeValide(code) {
     if (typeof code !== 'string' || code.length > 40) return false;
-    const l = this.db.prepare('SELECT expire FROM enrolements WHERE code = ?').get(code);
+    const l = this.db.prepare('SELECT expire FROM enrolements WHERE empreinte = ?').get(hashCode(code));
     return !!(l && l.expire >= secondes());
   }
 
@@ -181,4 +185,4 @@ export class Agents {
   }
 }
 
-export { hashJeton };
+export { hashJeton, hashCode };

@@ -1,7 +1,7 @@
 // Inscription d'un poste : scripts prêts à lancer qui installent l'agent (Python
 // et son environnement virtuel), et la commande d'une ligne qui les télécharge.
 //
-// Le code d'inscription (court, à usage unique, lié au site) est le seul secret
+// Le code d'inscription (128 bits, à usage unique, lié au site) est le seul secret
 // transporté ; l'agent l'échange lui-même contre SON jeton, qu'il range dans un
 // fichier 0600. Aucun jeton durable ne traverse la ligne de commande, la table
 // des processus, ni un fichier d'unité systemd.
@@ -12,7 +12,7 @@
 // ni PowerShell n'interprètent rien.
 const q = s => encodeURIComponent(s);
 
-export const CODE_INSCRIPTION = /^[A-Za-z0-9_-]{8,40}$/;
+export const CODE_INSCRIPTION = /^[A-Za-z0-9_-]{22}$/;
 export const LIBELLE = /^[\p{L}\p{N} ._()-]{0,60}$/u;
 const BASE = /^https?:\/\/(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+)(:\d{1,5})?(\/[A-Za-z0-9._~/-]*)?$/;
 
