@@ -319,8 +319,7 @@ export class Parc {
       if (!avant) throw new Error('Un secret d\'appareil (VNC ou Redfish) est illisible sous SOCLE_CLE : repose la clé remplacée dans SOCLE_CLE_ANCIENNE le temps d\'un démarrage.');
       return { etat: 'illisible' };
     };
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
+    transaction(this.db, () => {
       for (const m of this.db.prepare('SELECT id, ref, consoles, rf_secret FROM machines WHERE consoles IS NOT NULL OR rf_secret IS NOT NULL').all()) {
         const items = this.consolesEffectives(m);
         let change = false;
@@ -338,8 +337,7 @@ export class Parc {
           if (r.etat === 'illisible') { this.db.prepare('UPDATE machines SET rf_secret = NULL WHERE id = ?').run(m.id); bilan.retires++; }
         }
       }
-      this.db.exec('COMMIT');
-    } catch (e) { this.db.exec('ROLLBACK'); throw e; }
+    });
     return bilan;
   }
 
