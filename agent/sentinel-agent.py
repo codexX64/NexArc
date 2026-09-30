@@ -349,7 +349,7 @@ def collect_inventory():
                     with open('/sys/class/dmi/id/' + chemin) as f:
                         inv[cle] = f.read().strip()
                 except OSError:
-                    pass
+                    pass  # champ DMI illisible sans droits ou absent en VM : laissé vide
         elif IS_MAC:
             rc, out = run(['sysctl', '-n', 'machdep.cpu.brand_string'])
             if rc == 0:
@@ -426,7 +426,7 @@ def collect_software():
                     if nom.endswith('.app'):
                         apps.append({'name': nom[:-4], 'version': '', 'publisher': '', 'source': 'app'})
             except OSError:
-                pass
+                pass  # /Applications illisible : la liste reste celle de Homebrew
             rc, out = run(['brew', 'list', '--versions'], 25)
             if rc == 0:
                 for line in out.splitlines():
@@ -598,7 +598,7 @@ def lire_config():
                 if c.get('url') and c.get('token'):
                     return c
             except (OSError, ValueError):
-                pass
+                pass  # fichier illisible ou mal formé : la source suivante, sinon aucune
     return None
 
 
@@ -627,10 +627,9 @@ def ecrire_config(cfg):
     with os.fdopen(fd, 'w') as f:
         json.dump(cfg, f)
     os.replace(provisoire, CONFIG_FILE)
-    try:
-        os.chmod(CONFIG_FILE, 0o600)
-    except OSError:
-        pass
+    # Un fichier provisoire resté d'une écriture interrompue garde ses droits
+    # d'avant à l'ouverture : ils sont resserrés, et un échec n'est pas tu.
+    os.chmod(CONFIG_FILE, 0o600)
 
 
 def echanger_code(sess, url, code):

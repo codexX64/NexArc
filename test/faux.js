@@ -17,7 +17,7 @@ export async function fauxSynapse(jeton = 'cer_sentinel_essai') {
   const s = http.createServer((req, res) => {
     let corps = ''; req.on('data', c => { corps += c; }); req.on('end', () => {
       if (req.headers.authorization !== `Bearer ${jeton}`) { res.writeHead(401); return res.end('{}'); }
-      try { evenements.push(...(JSON.parse(corps).events || [])); } catch { /* ignore */ }
+      try { evenements.push(...(JSON.parse(corps).events || [])); } catch { /* lot illisible : l'essai qui l'attend échoue sur son absence */ }
       res.end('{"ok":true}');
     });
   });

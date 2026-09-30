@@ -388,7 +388,7 @@ test('pont VNC : authentification DES côté serveur, puis poignée None au navi
     assert.equal(await rfb.authOk, true, 'authentification VNC réussie côté serveur');
     // après la poignée, les octets du serveur RFB arrivent au navigateur
     await attendre(() => ws.envoyes.some(b => b.toString('latin1').includes('APRES-AUTH')), 2000);
-    ws.close(); await p.catch(() => {});
+    ws.close(); await p.catch(() => { /* le pont s'arrête sur la fermeture : son issue n'est pas l'objet de l'essai */ });
   } finally { await rfb.fermer(); }
 });
 

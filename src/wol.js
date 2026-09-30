@@ -49,7 +49,8 @@ export function emettre(mac, { diffusion = '255.255.255.255', ports = [9, 7] } =
       s.setBroadcast(true);
       let restants = ports.length;
       const fini = () => { if (--restants <= 0) { try { s.close(); } catch { /* déjà fermé */ } resolve(); } };
-      for (const port of ports) s.send(pkt, port, diffusion, err => { if (err) { /* meilleur effort : un port de plus ne rate pas le réveil */ } fini(); });
+      // Meilleur effort : un envoi refusé sur un port n'empêche pas l'autre.
+      for (const port of ports) s.send(pkt, port, diffusion, () => fini());
     });
   });
 }
