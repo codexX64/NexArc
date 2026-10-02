@@ -95,3 +95,8 @@
 /* Ajouter un poste : l'installateur à télécharger, puis la commande. */
 .installe{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .installe .hint{margin-top:4px}
+/* Tableaux et fiches : une valeur courte reste sur une ligne ; c'est le libellé,
+   plus long, qui se replie. Une valeur longue (une adresse) garde 60 % au plus. */
+td.cache-l{white-space:nowrap}
+.kv>span:first-child,.kv .k{flex:1 1 0;min-width:0}
+.kv .v,.kv b{flex:0 0 auto;max-width:60%}
