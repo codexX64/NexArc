@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "id": "nexarc",
   "name": "NEXARC",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Le parc sous les yeux : agents d'inventaire, tâches distantes, correctifs, consoles intégrées et réveil des machines — auto-hébergé, sur le socle commun.",
   "icon": "shield",
   "repository": "https://github.com/CodexX64/nexarc",
@@ -60,7 +60,7 @@
       "key": "IMAGE_TAG",
       "label": "Version de l'image",
       "type": "string",
-      "default": "2.0.0",
+      "default": "2.0.1",
       "help": "Étiquette de l'image publiée sur ghcr.io."
     },
     {
