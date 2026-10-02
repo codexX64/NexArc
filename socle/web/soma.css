@@ -239,7 +239,7 @@ svg.i{display:block;flex:none;stroke:currentColor;fill:none;stroke-linecap:round
 .railcard .row>*{min-width:0}
 .railcard .tag{overflow:hidden;text-overflow:ellipsis;display:block}
 .railcard .row:last-child{margin-bottom:0}
-.railcard b{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);font-weight:400;white-space:nowrap;flex:none}
+.railcard b{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);font-weight:400;white-space:nowrap;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:right}
 /* Une valeur courte ne se coupe pas : « 1 / 1 », « mot de passe · 1 clé ». */
 .une-ligne{white-space:nowrap}
 .bar{height:3px;border-radius:3px;background:var(--well);margin-top:11px;overflow:hidden}
@@ -560,3 +560,10 @@ textarea.field{min-height:90px;resize:vertical;line-height:1.5}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
 @media (hover:none){.fig:hover,.btn:hover{transform:none}}
+
+/* Premier compte d'un service installé par le Hub : les deux gestes, puis le
+   repli sans Hub, replié. */
+.porte .etapes-hub{margin:18px 0 0;padding-left:20px;display:grid;gap:10px;color:var(--ink-soft);font-size:14px;line-height:1.55}
+.porte .sans-hub{margin-top:18px;border-top:1px solid var(--hair-soft);padding-top:12px}
+.porte .sans-hub summary{cursor:pointer;color:var(--muted);font-size:12.5px}
+.porte .sans-hub .wfoot{padding:16px 0 0;border-top:none;margin-top:8px}
