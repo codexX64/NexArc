@@ -219,16 +219,35 @@ script proposé installe Python dans un environnement virtuel, télécharge
 l'agent et l'enrôle : l'agent échange le code contre **son** jeton, l'écrit
 avec sa configuration en `0600`, et se pose en service.
 
-- **Linux** (systemd) et **macOS** (launchd) : `curl -fsSL '<commande>' | sudo bash`.
-- **Windows** (tâche planifiée SYSTEM au démarrage), PowerShell en
-  administrateur : `powershell -ExecutionPolicy Bypass -Command "irm '<commande>' | iex"`,
-  ou le fichier `installer-sentinel.ps1` téléchargé depuis la même fenêtre. Le
-  script cherche Python 3 (en écartant le raccourci du Microsoft Store), l'installe
-  par winget s'il manque, ferme `%ProgramData%\SentinelAgent` à SYSTEM et aux
-  administrateurs (le jeton y est rangé ; ProgramData, lui, est lisible par tous
-  les utilisateurs), crée `%ProgramData%\SentinelAgent\venv`, y installe
-  `psutil` et `requests`, puis enrôle l'agent. C'est le chemin de la 1.1.0 ; le
-  binaire autonome PyInstaller n'existe plus.
+Pour chaque système, la fenêtre propose un **installateur à télécharger** et
+la **commande d'une ligne** ; les deux lancent le même script, avec le même code.
+
+| Système | Installateur | Commande |
+|---|---|---|
+| Windows (tâche planifiée SYSTEM) | `installer-sentinel.exe` : double-clic, accord d'un administrateur | PowerShell en administrateur : `powershell -ExecutionPolicy Bypass -Command "…; irm '<adresse>' \| iex"` |
+| macOS (launchd) | `installer-sentinel-macos.zip` : « Installer Sentinel.command », clic droit puis « Ouvrir » | Terminal : `curl -fsSL '<adresse>' \| sudo bash` |
+| Linux (systemd) | `installer-sentinel.sh` : `sudo bash installer-sentinel.sh` | `curl -fsSL '<adresse>' \| sudo bash` |
+
+L'exécutable Windows est compilé à la construction de l'image, depuis sa source
+(`agent/installateur-windows`, MinGW-w64, lié statiquement, sortie
+déterministe). Sentinel lui ajoute en fin de fichier l'adresse du script ;
+l'exécutable la revérifie caractère par caractère, demande l'élévation par son
+manifeste, puis lance le PowerShell du système par son chemin complet. Il
+n'est pas signé : SmartScreen avertit (« Informations complémentaires », puis
+« Exécuter quand même »). L'archive macOS garde le droit d'exécution du fichier
+`.command` ; non signé lui aussi, il s'ouvre par clic droit puis « Ouvrir ».
+
+Le script Windows cherche Python 3 (en écartant le raccourci du Microsoft
+Store), l'installe par winget s'il manque, ferme `%ProgramData%\SentinelAgent`
+à SYSTEM et aux administrateurs (le jeton y est rangé ; ProgramData, lui, est
+lisible par tous les utilisateurs), crée `%ProgramData%\SentinelAgent\venv`, y
+installe `psutil` et `requests`, puis enrôle l'agent. Sur macOS, Python 3 vient
+des outils en ligne de commande (`xcode-select --install`).
+
+Les postes joignent Sentinel à l'adresse de « Adresse publique de Sentinel »
+(`SENTINEL_PUBLIC_URL`) : sans elle, à celle de la page ouverte, qui ne vaut
+rien pour un autre poste quand c'est `localhost` (la fenêtre le signale).
+Un code sert à un seul poste et expire au bout d'une heure.
 
 Sur chaque système, les dépendances de l'agent s'installent aux versions de
 `agent/requirements.txt`, servi avec le code d'inscription : chaque paquet est
