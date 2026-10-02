@@ -60,8 +60,7 @@
       "key": "IMAGE_TAG",
       "label": "Version de l'image",
       "type": "string",
-      "default": "latest",
-      "advanced": true,
+      "default": "2.0.0",
       "help": "Étiquette de l'image publiée sur ghcr.io."
     },
     {
