@@ -102,7 +102,9 @@ export function chevauchements() {
     // Un libellé de bouton ou d'entrée de menu coupé en « … » cache ce qu'il
     // fait : la coupure propre vaut pour une donnée, pas pour une commande.
     const coupe = [b, ...b.querySelectorAll('*')].find(e => getComputedStyle(e).textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 1 && e.textContent.trim());
-    if (coupe && !b.matches('.field,.csel-btn,.vpick-btn')) defauts.push({ type: 'bouton-tronque', detail: `${nom(b)} ${coupe.scrollWidth} > ${coupe.clientWidth}` });
+    // Une ligne de données (data-donnee : un appareil, un fichier) coupe son
+    // nom comme une cellule de tableau : ce n'est pas une commande.
+    if (coupe && !b.matches('.field,.csel-btn,.vpick-btn,[data-donnee]')) defauts.push({ type: 'bouton-tronque', detail: `${nom(b)} ${coupe.scrollWidth} > ${coupe.clientWidth}` });
     const w = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       if (!n.textContent.trim()) continue;

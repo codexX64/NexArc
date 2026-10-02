@@ -239,7 +239,8 @@ svg.i{display:block;flex:none;stroke:currentColor;fill:none;stroke-linecap:round
 .railcard .row>*{min-width:0}
 .railcard .tag{overflow:hidden;text-overflow:ellipsis;display:block}
 .railcard .row:last-child{margin-bottom:0}
-.railcard b{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);font-weight:400;white-space:nowrap;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.railcard b{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);font-weight:400;white-space:nowrap;flex:0 1 auto;min-width:4ch;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.railcard .row>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
 /* Une valeur courte ne se coupe pas : « 1 / 1 », « mot de passe · 1 clé ». */
 .une-ligne{white-space:nowrap}
 .bar{height:3px;border-radius:3px;background:var(--well);margin-top:11px;overflow:hidden}
@@ -260,6 +261,13 @@ svg.i{display:block;flex:none;stroke:currentColor;fill:none;stroke-linecap:round
 .title{font-size:32px;line-height:1.05;letter-spacing:-.035em;overflow-wrap:anywhere}
 .lede{color:var(--muted);font-size:13.5px;max-width:58ch;margin-top:5px}
 .actions{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+/* Les actions d'un en-tête de page restent ensemble : elles passent sous le
+   titre plutôt que de se couper ; sur téléphone, empilées pleine largeur. */
+.headrow .actions{flex-wrap:nowrap}
+@media (max-width:560px){
+  .headrow .actions{flex-wrap:wrap;width:100%;margin-left:0}
+  .headrow .actions>*{flex:1 1 100%;justify-content:center}
+}
 .voile-rail{display:none}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 15px;border-radius:var(--r-ctl);font-size:13px;font-weight:500;
