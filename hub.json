@@ -72,6 +72,14 @@
       "help": "Créé par le Hub. Il ouvre l'API de Sentinel au Hub (état, tâches, réveils) — jamais les comptes ni les réglages d'authentification."
     },
     {
+      "key": "HUB_ADMIN_TOKEN",
+      "label": "Jeton d'administration des comptes",
+      "type": "secret",
+      "generate": "random:48",
+      "advanced": true,
+      "help": "Généré par le Hub, distinct du jeton de service : il ne sert qu'à gérer les comptes de Sentinel depuis Comptes des services, après confirmation de ton identité dans le Hub. Vide : aucune gestion depuis le Hub."
+    },
+    {
       "key": "SENTINEL_ALLOW_EXEC",
       "label": "Autoriser la commande libre",
       "type": "select",
@@ -534,6 +542,52 @@
     "hostNetwork": false,
     "capAdd": [],
     "egress": []
+  },
+  "accounts": {
+    "tokenKey": "HUB_ADMIN_TOKEN",
+    "roles": [
+      "admin",
+      "membre",
+      "lecture"
+    ],
+    "adminRole": "admin",
+    "invitation": true,
+    "fields": {
+      "id": "$.id",
+      "name": "$.identifiant",
+      "role": "$.role",
+      "mfa": "$.a2f",
+      "created": "$.cree",
+      "lastSeen": "$.derniere"
+    },
+    "list": {
+      "method": "GET",
+      "path": "/api/compte/hub/comptes"
+    },
+    "create": {
+      "method": "POST",
+      "path": "/api/compte/hub/comptes",
+      "body": {
+        "identifiant": "{{params.username}}",
+        "role": "{{params.role}}"
+      }
+    },
+    "update": {
+      "method": "PATCH",
+      "path": "/api/compte/hub/comptes/{{params.id}}",
+      "body": {
+        "role": "{{params.role}}"
+      }
+    },
+    "reset": {
+      "method": "POST",
+      "path": "/api/compte/hub/comptes/{{params.id}}/reinit",
+      "body": {}
+    },
+    "remove": {
+      "method": "DELETE",
+      "path": "/api/compte/hub/comptes/{{params.id}}"
+    }
   },
   "ai": {
     "exposeActions": true,

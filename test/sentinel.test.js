@@ -1157,3 +1157,23 @@ test('thème : la page porte la gamme posée par la page Thème du Hub ; SOMA ho
   assert.match(lire('deploy/compose.hub.yml'), /^ {6}SOCLE_THEME: "\{\{hub\.theme\}\}"$/m);
   assert.equal(JSON.parse(lire('hub.json')).minHubVersion, '0.7.0', '{{hub.theme}} vient avec le Hub 0.7.0');
 });
+
+test('comptes depuis le Hub : manifeste et Compose relient le jeton d’administration ; ni le jeton de service ni lui n’ouvrent l’autre côté', async () => {
+  const lire = f => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+  const manifeste = JSON.parse(lire('hub.json'));
+  assert.equal(manifeste.accounts.tokenKey, 'HUB_ADMIN_TOKEN');
+  assert.equal(manifeste.accounts.invitation, true);
+  assert.equal(manifeste.config.find(c => c.key === 'HUB_ADMIN_TOKEN').type, 'secret');
+  assert.match(lire('deploy/compose.hub.yml'), /^ {6}SOCLE_JETON_ADMIN_HUB: "\{\{config\.HUB_ADMIN_TOKEN\}\}"$/m);
+  const jeton = 'jeton-admin-hub-sentinel-' + 'b'.repeat(32);
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-hub-')), { SOCLE_JETON_ADMIN_HUB: jeton });
+  try {
+    const c = x.client();
+    const porteur = j => ({ entetes: { authorization: `Bearer ${j}` }, sansCsrf: true, origine: null });
+    const r = await c.get('/api/compte/hub/comptes', porteur(jeton));
+    assert.equal(r.status, 200);
+    assert.ok(Array.isArray(r.json));
+    assert.equal((await c.get('/api/compte/hub/comptes', porteur(JETON_HUB))).status, 401, 'le jeton de service n’administre pas les comptes');
+    assert.notEqual((await c.get('/api/machines', porteur(jeton))).status, 200, 'le jeton d’administration n’ouvre pas l’API');
+  } finally { await x.arreter(); }
+});
