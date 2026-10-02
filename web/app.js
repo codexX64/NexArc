@@ -658,15 +658,32 @@ async function dialogueInscription(relais) {
     peindreZone();
   };
   const peindreOs = () => osTabs.replaceChildren(...[['windows', 'Windows'], ['macos', 'macOS'], ['linux', 'Linux']].map(([v, l]) => h('button', { class: 'view' + (os === v ? ' on' : ''), type: 'button', text: l, onclick: () => { os = v; peindreOs(); peindreZone(); } })));
+  const copier = cmd => navigator.clipboard?.writeText(cmd).then(() => toast('Commande copiée.'), () => toast('Copie impossible.', true));
+  const AIDE = {
+    windows: { fichier: 'Télécharger l’installateur (.exe)', etapes: 'Double-clique sur le fichier : Windows demande l’accord d’un administrateur, puis l’agent s’installe, Python compris s’il manque. L’installateur n’est pas signé : si SmartScreen s’affiche, « Informations complémentaires » puis « Exécuter quand même ».', ligne: 'Ou colle dans PowerShell, ouvert en administrateur :' },
+    macos: { fichier: 'Télécharger l’installateur (.zip)', etapes: 'Ouvre l’archive, puis clic droit sur « Installer Sentinel » et « Ouvrir » (un fichier non signé ne s’ouvre pas d’un double-clic). Le Terminal demande le mot de passe d’un administrateur. Sans Python 3 sur le Mac, lance d’abord « xcode-select --install ».', ligne: 'Ou colle dans le Terminal :' },
+    linux: { fichier: 'Télécharger le script (.sh)', etapes: 'Lance-le avec « sudo bash installer-sentinel.sh ». Debian, Ubuntu, Fedora et Arch : Python est installé s’il manque.', ligne: 'Ou colle dans un terminal :' },
+  };
   const peindreZone = () => {
     if (!info) { zone.replaceChildren(h('p', { class: 'hint', text: 'Génération du code…' })); return; }
     const cmd = info.commands[os];
-    zone.replaceChildren(
-      h('p', { class: 'hint', text: { windows: 'Colle dans PowerShell (administrateur) :', macos: 'Colle dans le Terminal du Mac :', linux: 'Colle dans un terminal :' }[os] }),
+    const telechargement = new URL(info.downloads[os]);
+    const a = AIDE[os];
+    let hote = '';
+    try { hote = new URL(info.base_url).hostname; } catch { /* adresse déjà refusée par le serveur */ }
+    const locale = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(hote);
+    zone.replaceChildren(...[
+      locale ? h('div', { class: 'note warn mt10' }, icone('alerte'), h('div', { text: `Les postes joindraient Sentinel à ${info.base_url}, une adresse qui ne mène qu’à ta propre machine. Renseigne « Adresse publique de Sentinel » dans ses réglages du Hub (son adresse sur le réseau, ex. http://192.0.2.10:8090), puis rouvre ce dialogue.` })) : null,
+      !locale && info.base_url.startsWith('http:') ? h('p', { class: 'hint', text: 'Sentinel est joint en HTTP : le jeton de l’agent passe en clair sur le réseau. Sers-le en HTTPS dès que possible (action H1 de SECURITY.md).' }) : null,
+      h('div', { class: 'installe mt10' },
+        h('a', { class: 'btn solid', href: telechargement.pathname + telechargement.search, download: '' }, icone('telecharge', 15), a.fichier),
+        h('p', { class: 'hint', text: a.etapes })),
+      h('p', { class: 'hint mt14', text: a.ligne }),
       h('pre', { class: 'cmd', text: cmd }),
       h('div', { class: 'rowline9' },
-        h('button', { class: 'btn', type: 'button', onclick: () => { navigator.clipboard?.writeText(cmd).then(() => toast('Commande copiée.'), () => toast('Copie impossible.', true)); } }, icone('copie', 14), 'Copier la commande')),
-      h('p', { class: 'hint', text: `Le code d'inscription est à usage unique et expire dans ${Math.round(info.expire_dans / 60)} min.` }));
+        h('button', { class: 'btn', type: 'button', onclick: () => copier(cmd) }, icone('copie', 14), 'Copier'),
+        h('button', { class: 'btn flat', type: 'button', onclick: () => { info = null; peindreZone(); rafraichirInfo(); } }, icone('correctif', 14), 'Nouveau code')),
+      h('p', { class: 'hint', text: `Un code sert à un seul poste et expire dans ${Math.round(info.expire_dans / 60)} min ; installateur et commande portent le même. Pour un autre poste : « Nouveau code ».` })].filter(Boolean));
   };
   peindreOs(); rafraichirInfo();
   let t;
@@ -683,7 +700,7 @@ async function dialogueInscription(relais) {
 }
 
 function boutonKvm() {
-  const b = h('button', { class: 'btn flat plein mt14 btnretour', type: 'button', onclick: () => dialogueKvm() }, icone('serveur', 15), 'Plutôt une carte de gestion (sans agent)…');
+  const b = h('button', { class: 'btn flat plein mt14 btnretour', type: 'button', onclick: () => dialogueKvm() }, icone('serveur', 15), 'Carte de gestion, sans agent…');
   return b;
 }
 async function dialogueKvm() {

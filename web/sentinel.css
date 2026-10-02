@@ -91,3 +91,7 @@
   .remote-scrim{padding:0}
   .remote-shell{width:100%;height:100%;border-radius:0}
 }
+
+/* Ajouter un poste : l'installateur à télécharger, puis la commande. */
+.installe{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.installe .hint{margin-top:4px}
