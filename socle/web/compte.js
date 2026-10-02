@@ -762,7 +762,7 @@ export function pageComptes(api, { service }) {
         h('tbody', {}, liste.comptes.map(c => h('tr', {},
           h('td', { class: 'principal' }, h('div', { class: 'who-cell' }, h('div', { class: 'itile' + (c.role === 'admin' ? ' key' : '') }, icone(c.role === 'admin' ? 'bouclier' : 'utilisateurs')),
             h('div', {}, h('b', { text: c.affichage }), h('small', { text: `${c.identifiant} · ${c.role}${c.actif ? '' : ' · désactivé'}` })))),
-          h('td', { class: 'cache-m' }, h('span', { class: 'dim', text: facteursTxt(c) }), c.manquants.length ? h('span', { class: 'chip o', text: 'inscription incomplète' }) : null),
+          h('td', { class: 'cache-m' }, h('span', { class: 'dim une-ligne', text: facteursTxt(c) }), c.manquants.length ? h('span', { class: 'chip o', text: 'inscription incomplète' }) : null),
           h('td', { class: 'cache-l mono', text: depuis(c.derniere) }),
           h('td', { class: 'fin' }, h('div', { class: 'actions' },
             action('Rôle', 'flat', () => changerRole(api, c)),

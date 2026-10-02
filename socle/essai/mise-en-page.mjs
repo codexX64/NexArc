@@ -115,6 +115,19 @@ export function chevauchements() {
       if (lignes.size > 1) { defauts.push({ type: 'bouton-replie', detail: `${nom(b)} sur ${lignes.size} lignes` }); break; }
     }
   }
+  // Une valeur ou un libellé court (24 caractères au plus, hors paragraphe)
+  // replié sur deux lignes : « 1 / » puis « 1 », « Ubuntu 24.04 » puis « LTS ».
+  const marcheur = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = marcheur.nextNode(); n; n = marcheur.nextNode()) {
+    const t = n.textContent.trim();
+    if (!t || t.length > 24 || !/\s|\//.test(t)) continue;
+    const el = n.parentElement;
+    if (!el || el.closest('p,li,dd,blockquote,pre,code,textarea,svg,math,.hint,.lede,.note,.toast') || !visible(el)) continue;
+    const rg = document.createRange();
+    rg.selectNodeContents(n);
+    const lignes = new Set([...rg.getClientRects()].filter(r => r.width > 1).map(r => Math.round(r.top / 3)));
+    if (lignes.size > 1) defauts.push({ type: 'libelle-replie', detail: `${nom(el).slice(0, 50)} « ${t} » sur ${lignes.size} lignes` });
+  }
   const parents = new Set(boutons.map(b => b.parentElement));
   for (const p of parents) {
     const s = getComputedStyle(p);

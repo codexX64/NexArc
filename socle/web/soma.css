@@ -239,7 +239,9 @@ svg.i{display:block;flex:none;stroke:currentColor;fill:none;stroke-linecap:round
 .railcard .row>*{min-width:0}
 .railcard .tag{overflow:hidden;text-overflow:ellipsis;display:block}
 .railcard .row:last-child{margin-bottom:0}
-.railcard b{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);font-weight:400}
+.railcard b{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);font-weight:400;white-space:nowrap;flex:none}
+/* Une valeur courte ne se coupe pas : « 1 / 1 », « mot de passe · 1 clé ». */
+.une-ligne{white-space:nowrap}
 .bar{height:3px;border-radius:3px;background:var(--well);margin-top:11px;overflow:hidden}
 .bar i{display:block;width:0;height:100%;background:var(--accent);border-radius:3px;transition:width .4s}
 
