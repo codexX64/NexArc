@@ -133,8 +133,8 @@ function ligneMachine(m, avecOs) {
     h('td', { class: 'principal' }, h('div', { class: 'who-cell' }, h('span', { class: 'itile ' + (m.risk >= 75 ? 'hot' : '') }, icone(osIcone(m.oskind))), h('div', {}, h('b', { text: m.host }), h('small', { text: m.ip })))),
     h('td', { class: 'cache-m dim', text: m.site }),
     avecOs ? h('td', { class: 'cache-l dim', text: m.os }) : null,
-    avecOs ? h('td', { class: 'mono', text: m.online ? m.cpu + '%' : '—' }) : null,
-    h('td', {}, h('div', { class: 'risk ' + classeRisque(m.risk) }, h('div', { class: 'rail2' }, jauge), h('b', { text: String(m.risk) }))),
+    avecOs ? h('td', { class: 'mono cache-l', text: m.online ? m.cpu + '%' : '—' }) : null,
+    h('td', { class: 'cache-s' }, h('div', { class: 'risk ' + classeRisque(m.risk) }, h('div', { class: 'rail2' }, jauge), h('b', { text: String(m.risk) }))),
     h('td', {}, tagEtat(m)));
   tr.addEventListener('click', () => aller('detail', { ref: m.id }));
   return tr;
@@ -158,7 +158,7 @@ async function pageOverview() {
       fig('puce', '', 'Charge CPU moyenne', cpuMoy + ' %', 'postes en ligne')),
     h('div', { class: 'split' },
       h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'À surveiller' }), h('button', { class: 'btn sm flat', type: 'button', onclick: () => aller('machines') }, 'Tous les postes', icone('fleche', 14))),
-        h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Poste' }), h('th', { class: 'cache-m', text: 'Site' }), h('th', { text: 'Risque' }), h('th', { text: 'État' }))),
+        h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Poste' }), h('th', { class: 'cache-m', text: 'Site' }), h('th', { class: 'cache-s', text: 'Risque' }), h('th', { text: 'État' }))),
           h('tbody', {}, watch.length ? watch.map(m => ligneMachine(m, false)) : h('tr', {}, h('td', { colspan: 4, class: 'vide', text: 'Aucun poste en ligne.' })))))),
       h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'Activité récente' }), h('span', { class: 'note', text: 'flux temps réel' })), carteFeed())));
 }
@@ -200,7 +200,7 @@ async function pageMachines() {
     h('div', { class: 'headrow' }, h('div', {}, h('h1', { class: 'title', text: 'Postes' }), h('p', { class: 'lede', text: 'Chaque poste exécute l\'agent Sentinel et remonte son état.' })),
       h('div', { class: 'actions' }, peutAgir ? h('button', { class: 'btn solid', type: 'button', onclick: () => dialogueInscription(false) }, icone('plus', 15), 'Ajouter un poste') : null)),
     h('div', { class: 'card' }, h('div', { class: 'pad rowline' }, chips, q, compte),
-      h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Poste' }), h('th', { class: 'cache-m', text: 'Site' }), h('th', { class: 'cache-l', text: 'Système' }), h('th', { class: 'cache-l', text: 'CPU' }), h('th', { text: 'Risque' }), h('th', { text: 'État' }))), corps))));
+      h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Poste' }), h('th', { class: 'cache-m', text: 'Site' }), h('th', { class: 'cache-l', text: 'Système' }), h('th', { class: 'cache-l', text: 'CPU' }), h('th', { class: 'cache-s', text: 'Risque' }), h('th', { text: 'État' }))), corps))));
 }
 
 const LIBELLES_REGLES = {
