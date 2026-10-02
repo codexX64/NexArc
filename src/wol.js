@@ -2,8 +2,8 @@
 //
 // Un paquet magique est 6×0xFF suivis de l'adresse MAC répétée 16 fois, en
 // diffusion UDP. Une diffusion ne franchit pas les routeurs : un paquet émis
-// par Sentinel n'atteint que son propre segment. Pour réveiller une machine
-// d'un autre VLAN, Sentinel confie l'émission à un agent en ligne du même
+// par NEXARC n'atteint que son propre segment. Pour réveiller une machine
+// d'un autre VLAN, NEXARC confie l'émission à un agent en ligne du même
 // segment (tâche « wol »), qui diffuse localement.
 import dgram from 'node:dgram';
 

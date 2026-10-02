@@ -9,10 +9,10 @@ BEGIN
     BLOCK "040C04B0"
     BEGIN
       VALUE "CompanyName", "Codex64"
-      VALUE "FileDescription", "Sentinel - installation de l'agent"
-      VALUE "ProductName", "Sentinel"
+      VALUE "FileDescription", "NEXARC - installation de l'agent"
+      VALUE "ProductName", "NEXARC"
       VALUE "ProductVersion", "2.0.0"
-      VALUE "OriginalFilename", "installateur-sentinel.exe"
+      VALUE "OriginalFilename", "installateur-nexarc.exe"
     END
   END
   BLOCK "VarFileInfo"

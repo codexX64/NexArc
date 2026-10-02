@@ -16,7 +16,7 @@ import { certificatEssai } from '../socle/essai/smtp.js';
 import { reponseVnc } from '../src/vncbridge.js';
 import { accepter } from '../src/websocket.js';
 
-export async function fauxSynapse(jeton = 'cer_sentinel_essai') {
+export async function fauxSynapse(jeton = 'cer_nexarc_essai') {
   const evenements = [];
   const s = http.createServer((req, res) => {
     let corps = ''; req.on('data', c => { corps += c; }); req.on('end', () => {

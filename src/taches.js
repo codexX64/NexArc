@@ -14,7 +14,7 @@ export const CIBLES = new Set(['tous', 'site', 'host', 'oskind']);
 // fait pas partie : seule la route de réveil en crée, avec l'adresse MAC et la
 // diffusion qu'elle calcule elle-même.
 export const DEMANDES = ['cmd', 'install', 'uninstall', 'inventory', 'update'];
-// Le motif de l'agent (PAQUET dans sentinel-agent.py) : un nom de paquet ne
+// Le motif de l'agent (PAQUET dans nexarc-agent.py) : un nom de paquet ne
 // commence jamais par un tiret, il ne peut pas devenir une option.
 export const PAQUET = /^[A-Za-z0-9][A-Za-z0-9._+:@/-]{0,120}$/;
 
@@ -106,7 +106,7 @@ export class Taches {
   }
 
   // Toutes les minutes : les automatisations dues sont lancées. Une commande
-  // libre ne part que si SENTINEL_ALLOW_EXEC l'autorise encore : une
+  // libre ne part que si NEXARC_ALLOW_EXEC l'autorise encore : une
   // automatisation créée avant qu'on la désactive (ou reprise de la 1.x) attend.
   tour() {
     const now = secondes();

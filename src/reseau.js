@@ -1,5 +1,5 @@
 // Classement d'une adresse IP, pour ne jamais viser des métadonnées de nuage ni
-// une plage réservée quand Sentinel joint une carte de gestion (adaptée du garde
+// une plage réservée quand NEXARC joint une carte de gestion (adaptée du garde
 // sortant du Hub). Les cartes vivent sur le réseau interne : « interne » est
 // donc permis ici (la cible est saisie par un administrateur et épinglée), mais
 // « interdite » ne l'est jamais.

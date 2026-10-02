@@ -1,6 +1,6 @@
-SENTINEL — CE QUE LE SERVICE GARDE, ET POURQUOI
+NEXARC — CE QUE LE SERVICE GARDE, ET POURQUOI
 
-Sentinel est installé et exploité par la personne ou l'équipe qui l'héberge :
+NEXARC est installé et exploité par la personne ou l'équipe qui l'héberge :
 c'est elle qui répond de ces données. Ce texte dit ce que le logiciel conserve,
 ce qu'il envoie ailleurs, et comment chacun exerce ses droits.
 
@@ -53,20 +53,20 @@ Jetons d'agents
 
 Sauvegardes
   - l'exploitant peut tirer une copie de la base entière, chiffrée pour une clé
-    dont la partie privée ne vit pas sur la machine de Sentinel.
+    dont la partie privée ne vit pas sur la machine de NEXARC.
   Finalité : restaurer le service après une panne ou un incident. Durée : celle
   que l'exploitant fixe (trente jours conseillés) ; un compte effacé disparaît
   des sauvegardes à mesure qu'elles expirent.
 
 2. CE QUI PART AILLEURS
 
-  - Les agents installés sur les postes envoient à Sentinel leur télémétrie et
+  - Les agents installés sur les postes envoient à NEXARC leur télémétrie et
     leur inventaire. Rien ne quitte l'installation de ce fait.
   - Les cartes de gestion (iDRAC, iLO, JetKVM, BMC…) et les serveurs VNC/MeshCentral
     reçoivent les commandes de console et d'alimentation, sur le réseau de
-    l'exploitant, par des connexions dont Sentinel vérifie le certificat épinglé.
+    l'exploitant, par des connexions dont NEXARC vérifie le certificat épinglé.
     L'interface web d'une carte s'affiche sous une adresse à part, où aucun
-    cookie de Sentinel ne lui parvient.
+    cookie de NEXARC ne lui parvient.
   - SYNAPSE, s'il est installé, reçoit les faits du parc — machines enrôlées,
     perdues et revenues, alertes ouvertes et résolues, tâches, automatisations,
     réveils — jamais le contenu d'une commande, jamais un secret.
@@ -97,5 +97,5 @@ Sauvegardes
   l'exploitant ; le README du dépôt (section « Sécurité ») décrit les mesures en
   place et le canal de signalement d'une faille.
 
-Sentinel n'est pas destiné aux mineurs et ne traite aucune catégorie
+NEXARC n'est pas destiné aux mineurs et ne traite aucune catégorie
 particulière de données.

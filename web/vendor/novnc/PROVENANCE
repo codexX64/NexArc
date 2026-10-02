@@ -3,7 +3,7 @@ noVNC 1.5.0 — bibliothèque cliente RFB (VNC) pour navigateur. Licence MPL 2.0
 
 Ce qui est servi : les sources en modules ES de noVNC (core/) et sa copie de
 pako (vendor/pako/lib/), telles que l'arbre du dépôt novnc/noVNC les publie au
-tag v1.5.0. Servi par Sentinel lui-même sous sa politique de contenu
+tag v1.5.0. Servi par NEXARC lui-même sous sa politique de contenu
 (script-src 'self') : aucune requête vers un tiers.
 
 Vérification (paquet npm officiel) :

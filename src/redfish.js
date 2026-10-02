@@ -1,6 +1,6 @@
 // Redfish : alimentation native des cartes de gestion (iDRAC, iLO, IPMI/BMC).
 //
-// Redfish est exposé par toute carte moderne : Sentinel lit l'état
+// Redfish est exposé par toute carte moderne : NEXARC lit l'état
 // d'alimentation et agit dessus sans ouvrir l'interface de la carte, et sans
 // licence Enterprise (celle-ci ne verrouille que la console virtuelle, pas
 // l'alimentation). Les identifiants sont scellés par le Coffre du socle, et ne

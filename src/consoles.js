@@ -11,7 +11,7 @@ import { classer } from './reseau.js';
 // que l'opérateur doit savoir avant de choisir.
 export const TYPES = {
   jetkvm: { label: 'JetKVM', url: true, screen: true, embed: true, power: false, recommande: true,
-    note: 'Écran + BIOS sans licence, boîtier HDMI/USB. S\'intègre bien dans Sentinel.' },
+    note: 'Écran + BIOS sans licence, boîtier HDMI/USB. S\'intègre bien dans NEXARC.' },
   idrac: { label: 'Dell iDRAC', url: true, screen: 'licence', embed: 'partiel', power: true, recommande: false,
     note: 'Alimentation via Redfish (sans licence Enterprise). Écran : active le serveur VNC de l\'iDRAC puis ajoute une console « VNC intégrée ».' },
   ilo: { label: 'HPE iLO', url: true, screen: 'licence', embed: 'partiel', power: true, recommande: false,
@@ -25,7 +25,7 @@ export const TYPES = {
   mesh: { label: 'MeshCentral', url: false, screen: true, embed: 'partiel', power: false, recommande: false,
     note: 'Bureau distant d\'un poste avec OS démarré — pas d\'accès BIOS.' },
   vnc: { label: 'Console VNC (intégrée)', url: false, vnc: true, screen: true, embed: true, power: false, recommande: true,
-    note: 'Console plein écran dans Sentinel, sans Java. iDRAC/iLO VNC, hyperviseurs, tout KVM VNC. Cible : hôte:port (ex. 198.51.100.10:5900).' },
+    note: 'Console plein écran dans NEXARC, sans Java. iDRAC/iLO VNC, hyperviseurs, tout KVM VNC. Cible : hôte:port (ex. 198.51.100.10:5900).' },
   url: { label: 'Interface web', url: true, screen: false, embed: 'partiel', power: false, recommande: false,
     note: 'Toute interface d\'administration web.' },
 };

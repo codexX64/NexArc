@@ -1,11 +1,11 @@
 // Mandataire inverse des consoles web (iDRAC, iLO, JetKVM, IPMI…), servi par
-// l'origine des consoles (origine-consoles.js), jamais par celle de Sentinel.
+// l'origine des consoles (origine-consoles.js), jamais par celle de NEXARC.
 //
 // Ces cartes envoient X-Frame-Options / CSP frame-ancestors : un navigateur
-// refuse de les afficher dans Sentinel. Chaque requête arrive sous
+// refuse de les afficher dans NEXARC. Chaque requête arrive sous
 // /c/{passe}/… , est transmise à la cible RÉSOLUE CÔTÉ SERVEUR (jamais fournie
 // par le client), et la politique de cadrage de la carte est remplacée par la
-// seule page de Sentinel qui a demandé la passe. Le certificat auto-signé de la
+// seule page de NEXARC qui a demandé la passe. Le certificat auto-signé de la
 // carte est épinglé et vérifié.
 import http from 'node:http';
 import https from 'node:https';
@@ -24,11 +24,11 @@ const RETIRES_DE_LA_REQUETE = new Set([
 ]);
 
 // Un navigateur ne distingue pas les cookies par port : servie sur le même hôte
-// que Sentinel, l'origine des consoles reçoit les cookies de Sentinel (session,
+// que NEXARC, l'origine des consoles reçoit les cookies de NEXARC (session,
 // cérémonie). Ils ne partent jamais vers la carte, et la carte ne peut pas en
 // poser un du même nom. Les préfixes __Host- et __Secure- sont réservés au
 // service.
-const COOKIES_DU_SERVICE = /^(?:__Host-|__Secure-)?sentinel-|^__(?:Host|Secure)-/i;
+const COOKIES_DU_SERVICE = /^(?:__Host-|__Secure-)?nexarc-|^__(?:Host|Secure)-/i;
 
 function cookiesPourLaCarte(entete) {
   const gardes = String(entete || '').split(';').map(c => c.trim()).filter(c => c && !COOKIES_DU_SERVICE.test(c.split('=')[0].trim()));
@@ -77,7 +77,7 @@ function cibleAmont(base, chemin, query) {
 }
 
 // Transmet une requête HTTP vers la console. `pin` (certificat épinglé) est
-// requis pour une cible https ; `parent`, l'origine de la page de Sentinel
+// requis pour une cible https ; `parent`, l'origine de la page de NEXARC
 // qui encadre la console.
 export function mandaterHttp(req, res, { base, reste, prefix, pin, corps, parent }) {
   const cible = new URL(cibleAmont(base, reste || '', new URL(req.url, 'http://x').search.slice(1)));

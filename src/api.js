@@ -1,4 +1,4 @@
-// Routes de Sentinel. Chaque route dit qui peut l'appeler : session du socle
+// Routes de NEXARC. Chaque route dit qui peut l'appeler : session du socle
 // (avec son rôle), jeton de service du Hub, ou jeton d'agent — et rien d'autre.
 // Toute machine désignée par une requête est résolue par sa référence publique
 // et son autorisation vérifiée. Les actions sensibles (secrets d'appareil,
@@ -70,7 +70,7 @@ const S = {
 // Une carte en échec : l'opérateur lit une cause courte et une référence ; le
 // détail (adresse, message réseau, réponse brute de la carte) ne va qu'au
 // journal du serveur, sous la même référence. Ce n'est pas une erreur interne
-// de Sentinel : 502, rendu par l'aiguillage, hors du compte que suit la vigie.
+// de NEXARC : 502, rendu par l'aiguillage, hors du compte que suit la vigie.
 class CarteEnEchec extends Error {}
 function causeCarte(e) {
   const m = String(e?.message || '');
@@ -168,7 +168,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     // Commande libre : rôle admin + renfort récent, et seulement si activée.
     if (b.kind === 'cmd') {
       if (hub) refus('Une commande libre passe par un opérateur, jamais par le Hub.');
-      if (!cfg.commandeLibre) refus('Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
+      if (!cfg.commandeLibre) refus('Commande libre désactivée (NEXARC_ALLOW_EXEC=0).');
       portail.exiger(ctx, { role: 'admin', renfort: true });
     }
     const defaut = chargeRefusee(b.kind, b.payload.trim());
@@ -344,11 +344,11 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   r.get('/api/automations', ctx => { session(ctx); return { automations: parc.automatisations() }; }, { role: 'lecture' });
   // Une automatisation « commande libre » est une commande libre répétée : même
-  // réglage (SENTINEL_ALLOW_EXEC), même rôle, même renfort, à chaque geste qui
+  // réglage (NEXARC_ALLOW_EXEC), même rôle, même renfort, à chaque geste qui
   // la fait exister ou exécuter.
   const commandeLibre = (ctx, kind) => {
     if (kind !== 'cmd') return;
-    if (!cfg.commandeLibre) refus('Commande libre désactivée (SENTINEL_ALLOW_EXEC=0).');
+    if (!cfg.commandeLibre) refus('Commande libre désactivée (NEXARC_ALLOW_EXEC=0).');
     portail.exiger(ctx, { role: 'admin', renfort: true });
   };
   r.post('/api/automations', async ctx => {
@@ -438,8 +438,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
   r.get('/api/enroll/agent.py', ctx => {
     // Une session d'opérateur, ou un code d'inscription encore valide.
     codeOuSession(ctx, ctx.q.code);
-    const src = fs.readFileSync(path.join(racine, 'agent', 'sentinel-agent.py'), 'utf8');
-    ctx.res.writeHead(200, { 'Content-Type': 'text/x-python; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="sentinel-agent.py"' });
+    const src = fs.readFileSync(path.join(racine, 'agent', 'nexarc-agent.py'), 'utf8');
+    ctx.res.writeHead(200, { 'Content-Type': 'text/x-python; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="nexarc-agent.py"' });
     ctx.res.end(src);
     return undefined;
   }, { public: true, requete: S.telechargement });
@@ -484,8 +484,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     let corpsFichier;
     if (q.os === 'windows') {
       let executable;
-      try { executable = fs.readFileSync(path.join(racine, 'agent', 'installateur-windows', 'installateur-sentinel.exe')); } catch {
-        throw new ErreurHttp(503, 'Installateur Windows absent de cette image : la commande PowerShell fait la même chose.');
+      try { executable = fs.readFileSync(path.join(racine, 'agent', 'installateur-windows', 'installateur-nexarc.exe')); } catch {
+        throw new ErreurHttp(404, 'Installateur Windows absent de cette image : la commande PowerShell fait la même chose.');
       }
       corpsFichier = enroll.installateurWindows(executable, enroll.urlScript('windows', baseUrl(ctx), code, { site, nom, relais }));
     } else {

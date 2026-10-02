@@ -39,7 +39,7 @@ const agent = jeton => ({ entetes: { 'x-agent-token': jeton }, origine: null });
 const remontee = { hostname: 'serveur-a', ip: '198.51.100.12', oskind: 'lin', cpu: 3, ram: 20, disk: 30 };
 
 const HUB1 = crypto.randomBytes(24).toString('base64url'), HUB2 = crypto.randomBytes(24).toString('base64url');
-note(await demarrer({ SENTINEL_HUB_TOKEN: HUB1, SENTINEL_ALLOW_EXEC: '1' }), 'démarrage : commande libre permise, jeton du Hub n° 1');
+note(await demarrer({ NEXARC_HUB_TOKEN: HUB1, NEXARC_ALLOW_EXEC: '1' }), 'démarrage : commande libre permise, jeton du Hub n° 1');
 const admin = new Client(PORT);
 const { auth } = await adminComplet(admin, { jeton: JETON });
 const { client: membre } = await membreInvite(admin, () => new Client(PORT), { identifiant: 'bruno' });
@@ -59,7 +59,7 @@ note((await admin.post('/api/compte/admin/sessions/fermer-tout')).status === 200
 note((await membre.get('/api/state')).status === 401 && (await admin.get('/api/state')).status === 200, 'la session du membre est morte, pas celle de l’administrateur');
 // 3. Couper la commande libre, 4. couper le Hub
 await arreter();
-note(await demarrer({ SENTINEL_HUB_TOKEN: HUB2, SENTINEL_ALLOW_EXEC: '0' }), 'redéploiement : commande libre coupée, jeton du Hub n° 2');
+note(await demarrer({ NEXARC_HUB_TOKEN: HUB2, NEXARC_ALLOW_EXEC: '0' }), 'redéploiement : commande libre coupée, jeton du Hub n° 2');
 note((await admin.post(`/api/machines/${ref}/jobs`, { kind: 'cmd', payload: 'id' })).status === 403, 'plus aucune commande libre créée');
 note((await new Client(PORT).req('GET', '/api/summary', undefined, hub(HUB1))).status === 401 && (await new Client(PORT).req('GET', '/api/summary', undefined, hub(HUB2))).status === 200, 'l’ancien jeton du Hub ne vaut plus rien, le nouveau ouvre');
 // 5. Révoquer les jetons d'agents
@@ -84,10 +84,10 @@ await arreter();
 const prive = path.join(D, 'prive.pem'), restauree = path.join(D, 'restauree.db');
 fs.writeFileSync(prive, paire.privateKey);
 note(cli(['restaurer', prive, restauree], sauv.stdout).status === 0, 'restaurée ailleurs avec la clé privée seule');
-for (const f of ['sentinel.db', 'sentinel.db-wal', 'sentinel.db-shm']) fs.rmSync(path.join(DONNEES, f), { force: true });
-fs.copyFileSync(restauree, path.join(DONNEES, 'sentinel.db'));
-fs.chmodSync(path.join(DONNEES, 'sentinel.db'), 0o600);
-note(await demarrer({ SENTINEL_HUB_TOKEN: HUB2 }), 'redémarrage sur la base restaurée');
+for (const f of ['nexarc.db', 'nexarc.db-wal', 'nexarc.db-shm']) fs.rmSync(path.join(DONNEES, f), { force: true });
+fs.copyFileSync(restauree, path.join(DONNEES, 'nexarc.db'));
+fs.chmodSync(path.join(DONNEES, 'nexarc.db'), 0o600);
+note(await demarrer({ NEXARC_HUB_TOKEN: HUB2 }), 'redémarrage sur la base restaurée');
 const c = new Client(PORT);
 const options = await c.post('/api/compte/connexion/cle/options');
 note((await c.post('/api/compte/connexion/cle', { reponse: auth.signer(options.json, c.origine) })).json?.niveau === 'complet', 'l’administrateur se reconnecte avec sa clé d’accès');

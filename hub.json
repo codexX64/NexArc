@@ -1,12 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/CodexX64/hub-registry/main/schema/hub-extension.v1.json",
   "manifestVersion": 1,
-  "id": "sentinel",
-  "name": "Sentinel RMM",
+  "id": "nexarc",
+  "name": "NEXARC",
   "version": "2.0.0",
   "description": "Le parc sous les yeux : agents d'inventaire, tâches distantes, correctifs, consoles intégrées et réveil des machines — auto-hébergé, sur le socle commun.",
   "icon": "shield",
-  "repository": "https://github.com/CodexX64/sentinel-rmm",
+  "repository": "https://github.com/CodexX64/nexarc",
   "license": "MIT",
   "minHubVersion": "0.7.0",
   "install": {
@@ -14,10 +14,10 @@
     "compose": "deploy/compose.hub.yml",
     "remote": {
       "supported": true,
-      "label": "Adresse de Sentinel",
+      "label": "Adresse de NEXARC",
       "placeholder": "http://192.0.2.40:8090",
       "defaultPort": 8090,
-      "setupHelp": "Pour un Sentinel déjà en service ailleurs : poser SENTINEL_HUB_TOKEN dans son environnement, redémarrer, puis coller ce jeton ici."
+      "setupHelp": "Pour un NEXARC déjà en service ailleurs : poser NEXARC_HUB_TOKEN dans son environnement, redémarrer, puis coller ce jeton ici."
     },
     "healthcheck": {
       "type": "http",
@@ -69,7 +69,7 @@
       "label": "Jeton de service",
       "type": "secret",
       "generate": "random:32",
-      "help": "Créé par le Hub. Il ouvre l'API de Sentinel au Hub (état, tâches, réveils) — jamais les comptes ni les réglages d'authentification."
+      "help": "Créé par le Hub. Il ouvre l'API de NEXARC au Hub (état, tâches, réveils) — jamais les comptes ni les réglages d'authentification."
     },
     {
       "key": "HUB_ADMIN_TOKEN",
@@ -77,10 +77,10 @@
       "type": "secret",
       "generate": "random:48",
       "advanced": true,
-      "help": "Généré par le Hub, distinct du jeton de service : il ne sert qu'à gérer les comptes de Sentinel depuis Comptes des services, après confirmation de ton identité dans le Hub. Vide : aucune gestion depuis le Hub."
+      "help": "Généré par le Hub, distinct du jeton de service : il ne sert qu'à gérer les comptes de NEXARC depuis Comptes des services, après confirmation de ton identité dans le Hub. Vide : aucune gestion depuis le Hub."
     },
     {
-      "key": "SENTINEL_ALLOW_EXEC",
+      "key": "NEXARC_ALLOW_EXEC",
       "label": "Autoriser la commande libre",
       "type": "select",
       "default": "0",
@@ -97,7 +97,7 @@
       "help": "Même activée, une commande libre exige le rôle administrateur et une confirmation récente."
     },
     {
-      "key": "SENTINEL_MAX_MACHINES",
+      "key": "NEXARC_MAX_MACHINES",
       "label": "Plafond de machines",
       "type": "number",
       "default": 5000,
@@ -105,7 +105,7 @@
       "advanced": true
     },
     {
-      "key": "SENTINEL_ALERT_OFFLINE_MINUTES",
+      "key": "NEXARC_ALERT_OFFLINE_MINUTES",
       "label": "Alerte : hors ligne au-delà de (min)",
       "type": "number",
       "default": 15,
@@ -115,7 +115,7 @@
       "help": "Minutes sans remontée d'agent avant d'ouvrir une alerte. Un redémarrage ordinaire reste en dessous."
     },
     {
-      "key": "SENTINEL_ALERT_PATCH_DAYS",
+      "key": "NEXARC_ALERT_PATCH_DAYS",
       "label": "Alerte : correctifs de sécurité en attente depuis (jours)",
       "type": "number",
       "default": 7,
@@ -124,7 +124,7 @@
       "advanced": true
     },
     {
-      "key": "SENTINEL_ALERT_DISK_PERCENT",
+      "key": "NEXARC_ALERT_DISK_PERCENT",
       "label": "Alerte : disque rempli à (%)",
       "type": "number",
       "default": 90,
@@ -133,7 +133,7 @@
       "advanced": true
     },
     {
-      "key": "SENTINEL_ALERT_RISK",
+      "key": "NEXARC_ALERT_RISK",
       "label": "Alerte : score de risque à partir de",
       "type": "number",
       "default": 70,
@@ -143,7 +143,7 @@
       "help": "Le score ne compte que des défauts constatés par l'agent (antivirus, pare-feu, chiffrement, correctifs de sécurité)."
     },
     {
-      "key": "SENTINEL_MESH_URL",
+      "key": "NEXARC_MESH_URL",
       "label": "Serveur MeshCentral",
       "type": "string",
       "default": "",
@@ -151,7 +151,7 @@
       "help": "Vide : la prise en main MeshCentral est désactivée."
     },
     {
-      "key": "SENTINEL_MESH_USER",
+      "key": "NEXARC_MESH_USER",
       "label": "Compte de service Mesh",
       "type": "string",
       "default": "",
@@ -159,22 +159,22 @@
       "help": "Sans le préfixe « user// ». Pour l'auto-login un clic (compte SANS second facteur)."
     },
     {
-      "key": "SENTINEL_MESH_LOGIN_KEY",
+      "key": "NEXARC_MESH_LOGIN_KEY",
       "label": "Clé de connexion Mesh",
       "type": "secret",
       "advanced": true,
       "help": "Clé hex de « meshcentral --logintokenkey ». Sans elle, l'opérateur ouvre le bureau avec sa propre session Mesh."
     },
     {
-      "key": "SENTINEL_CONSOLE_URL",
+      "key": "NEXARC_CONSOLE_URL",
       "label": "Adresse des consoles web",
       "type": "string",
       "default": "",
       "advanced": true,
-      "help": "Origine qui sert l'interface des cartes de gestion dans Sentinel (second port, « consoles »), sous son propre nom d'hôte, par ex. https://consoles.exemple.org. Vide : l'interface d'une carte s'ouvre dans un nouvel onglet."
+      "help": "Origine qui sert l'interface des cartes de gestion dans NEXARC (second port, « consoles »), sous son propre nom d'hôte, par ex. https://consoles.exemple.org. Vide : l'interface d'une carte s'ouvre dans un nouvel onglet."
     },
     {
-      "key": "SENTINEL_MESH_EMBED",
+      "key": "NEXARC_MESH_EMBED",
       "label": "Bureau Mesh en iframe",
       "type": "select",
       "default": "0",
@@ -191,12 +191,12 @@
       ]
     },
     {
-      "key": "SENTINEL_PUBLIC_URL",
-      "label": "Adresse publique de Sentinel",
+      "key": "NEXARC_PUBLIC_URL",
+      "label": "Adresse publique de NEXARC",
       "type": "string",
       "default": "",
       "advanced": true,
-      "help": "Adresse que les agents utiliseront pour joindre Sentinel (vide = celle de la requête d'enrôlement)."
+      "help": "Adresse que les agents utiliseront pour joindre NEXARC (vide = celle de la requête d'enrôlement)."
     },
     {
       "key": "SOCLE_HTTP",
@@ -207,21 +207,21 @@
       "options": [
         {
           "value": "0",
-          "label": "Non — Sentinel est servi en HTTPS (Relay ou certificat du Hub)"
+          "label": "Non — NEXARC est servi en HTTPS (Relay ou certificat du Hub)"
         },
         {
           "value": "1",
           "label": "Oui — réseau de confiance, mode dégradé"
         }
       ],
-      "help": "Les clés d'accès n'existent qu'en HTTPS. En mode dégradé, l'administrateur se connecte avec mot de passe et application d'authentification, et Sentinel l'affiche partout."
+      "help": "Les clés d'accès n'existent qu'en HTTPS. En mode dégradé, l'administrateur se connecte avec mot de passe et application d'authentification, et NEXARC l'affiche partout."
     },
     {
       "key": "SOCLE_CLE",
       "label": "Clé maîtresse",
       "type": "secret",
       "generate": "random:32",
-      "help": "Scelle les secrets d'appareils (VNC, Redfish) et les secrets TOTP. Créée par le Hub, gardée dans son coffre, jamais sur le volume de Sentinel."
+      "help": "Scelle les secrets d'appareils (VNC, Redfish) et les secrets TOTP. Créée par le Hub, gardée dans son coffre, jamais sur le volume de NEXARC."
     },
     {
       "key": "SOCLE_CLE_ANCIENNE",
@@ -235,7 +235,7 @@
       "label": "Jeton d'installation",
       "type": "secret",
       "advanced": true,
-      "help": "Vide : Sentinel en tire un au premier démarrage et l'écrit dans ses journaux. Il ne sert qu'à créer le premier compte."
+      "help": "Vide : NEXARC en tire un au premier démarrage et l'écrit dans ses journaux. Il ne sert qu'à créer le premier compte."
     },
     {
       "key": "SOCLE_PROXYS",
@@ -259,7 +259,7 @@
       "type": "string",
       "default": "",
       "advanced": true,
-      "help": "Ex. https://sentinel.exemple. Les liens des courriels d'alerte en partent. Obligatoire avec un relais SMTP."
+      "help": "Ex. https://nexarc.exemple. Les liens des courriels d'alerte en partent. Obligatoire avec un relais SMTP."
     },
     {
       "key": "SOCLE_SMTP_HOTE",
@@ -267,7 +267,7 @@
       "type": "string",
       "default": "",
       "advanced": true,
-      "help": "Vide : les alertes de sécurité restent visibles dans Sentinel, sans courriel."
+      "help": "Vide : les alertes de sécurité restent visibles dans NEXARC, sans courriel."
     },
     {
       "key": "SOCLE_SMTP_PORT",
@@ -591,6 +591,6 @@
   },
   "ai": {
     "exposeActions": true,
-    "hints": "Sentinel surveille le parc de machines, pas les services Docker — ça, c'est le Hub. « État du parc » d'abord pour les comptes ; une tâche distante est destructive et passe par une validation humaine (une commande libre exige même un opérateur administrateur). Le réveil (WoL) est sans danger. Sentinel raconte tout seul à SYNAPSE (si installé) les machines enrôlées, perdues et revenues, les tâches, les automatisations et les réveils."
+    "hints": "NEXARC surveille le parc de machines, pas les services Docker — ça, c'est le Hub. « État du parc » d'abord pour les comptes ; une tâche distante est destructive et passe par une validation humaine (une commande libre exige même un opérateur administrateur). Le réveil (WoL) est sans danger. NEXARC raconte tout seul à SYNAPSE (si installé) les machines enrôlées, perdues et revenues, les tâches, les automatisations et les réveils."
   }
 }

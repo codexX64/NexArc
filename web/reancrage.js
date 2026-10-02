@@ -1,5 +1,5 @@
 // Chargé par l'origine des consoles dans la page d'une carte de gestion, jamais
-// par Sentinel. La carte croit parler à la racine de son serveur : ses appels
+// par NEXARC. La carte croit parler à la racine de son serveur : ses appels
 // construits à l'exécution (fetch, XMLHttpRequest, WebSocket) sont réancrés
 // sous le préfixe de la passe, que le mandataire a posé dans data-prefixe.
 (() => {

@@ -1,4 +1,4 @@
-// Exercice de rotation de bout en bout : Sentinel lancé comme en production
+// Exercice de rotation de bout en bout : NEXARC lancé comme en production
 // (processus à part, clé maîtresse lue dans un fichier _FILE), un compte avec
 // TOTP, clé d'accès et codes de secours, un agent enrôlé, une console VNC à mot
 // de passe et une carte Redfish ; puis SOCLE_CLE tournée comme le dit le README,
@@ -94,7 +94,7 @@ await arreter();
 poser('socle_cle_ancienne', lire('socle_cle')); poser('socle_cle', cle());
 await note((await demarrer()).code === null, 'redémarrage avec la clé neuve et l’ancienne posée');
 await note(/\[coffre\] Clé tournée : 1 secret\(s\) TOTP rescellé\(s\), 10 code\(s\) de secours/.test(sortie), 'socle : ' + (sortie.match(/\[coffre\] Clé tournée : [^.]*\./)?.[0] || 'aucune trace'));
-await note(/\[coffre\] Secrets d'appareils rescellés sous SOCLE_CLE : 1 mot\(s\) de passe VNC, 1 identifiant\(s\) Redfish\./.test(sortie), 'Sentinel : ' + (sortie.match(/\[coffre\] Secrets d'appareils[^.]*\./)?.[0] || 'aucune trace'));
+await note(/\[coffre\] Secrets d'appareils rescellés sous SOCLE_CLE : 1 mot\(s\) de passe VNC, 1 identifiant\(s\) Redfish\./.test(sortie), 'NEXARC : ' + (sortie.match(/\[coffre\] Secrets d'appareils[^.]*\./)?.[0] || 'aucune trace'));
 let c = new Client(PORT);
 await note((await connexion(c, 'ana', MDP)).json?.etape === 'second', 'mot de passe accepté');
 await new Promise(r => setTimeout(r, 31_000));

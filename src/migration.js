@@ -1,4 +1,4 @@
-// Reprise d'une base Sentinel 1.1.0.
+// Reprise d'une base Sentinel 1.1.0, l'ancien nom de NEXARC.
 //
 // La 1.x avait un opérateur unique (table auth, mot de passe scrypt, secret
 // TOTP en clair) : il devient l'administrateur du socle. L'empreinte scrypt du
@@ -53,7 +53,7 @@ export function lienDeSecours({ db, comptes, journal, urlPublique = '', log = co
   db.prepare("DELETE FROM socle_jetons WHERE compte = ? AND usage = 'reinit'").run(c.id);
   const jeton = comptes.emettreJeton('reinit', c.id, SECOURS_MS);
   journal.ecrire({ acteur: 'système', action: 'compte.reinit_emis', objet: c.id, details: { par: 'démarrage, aucun administrateur ne peut se connecter' } });
-  log.warn?.(`[comptes] Aucun administrateur ne peut se connecter. Lien de réinitialisation pour « ${c.identifiant} », valable vingt minutes et une seule fois : ${urlPublique || '<adresse de Sentinel>'}/#reinit=${jeton}`);
+  log.warn?.(`[comptes] Aucun administrateur ne peut se connecter. Lien de réinitialisation pour « ${c.identifiant} », valable vingt minutes et une seule fois : ${urlPublique || '<adresse de NEXARC>'}/#reinit=${jeton}`);
   return jeton;
 }
 

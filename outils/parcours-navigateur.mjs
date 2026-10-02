@@ -1,13 +1,13 @@
-// Parcours réel de Sentinel dans Chromium (clé d'accès virtuelle) et contrôle de
+// Parcours réel de NEXARC dans Chromium (clé d'accès virtuelle) et contrôle de
 // mise en page à chaque largeur. Usage :
 //   node outils/parcours-navigateur.mjs http://localhost:8090 JETON DOSSIER
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { chevauchements, LARGEURS } from '../socle/essai/mise-en-page.mjs';
 
-const [base, jeton, sortie = '/tmp/captures-sentinel'] = process.argv.slice(2);
+const [base, jeton, sortie = '/tmp/captures-nexarc'] = process.argv.slice(2);
 fs.mkdirSync(sortie, { recursive: true });
-const MDP = 'phrase de passe pour sentinel en local';
+const MDP = 'phrase de passe pour nexarc en local';
 const navigateur = await chromium.launch();
 const contexte = await navigateur.newContext({ viewport: { width: 1280, height: 860 } });
 const page = await contexte.newPage();

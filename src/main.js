@@ -1,10 +1,10 @@
-// Démarrage de Sentinel : configuration validée, base, socle commun (comptes,
+// Démarrage de NEXARC : configuration validée, base, socle commun (comptes,
 // sessions, coffre), reprise de la 1.x, boucles de collecte et d'automatisation,
 // serveur HTTP et mise à niveau WebSocket (pont VNC) écrite à la main, et, si
 // son adresse est posée, l'origine à part des consoles web.
 import http from 'node:http';
 import path from 'node:path';
-import { lireConfigSentinel, VERSION } from './config.js';
+import { lireConfigNexarc, VERSION } from './config.js';
 import { ouvrirBase, Parc } from './base.js';
 import { Agents } from './agents.js';
 import { Alertes } from './alertes.js';
@@ -23,7 +23,7 @@ import {
 const RACINE = path.resolve(import.meta.dirname, '..');
 const CONSOLE = { info: (...a) => console.log(...a), warn: (...a) => console.warn(...a), error: (...a) => console.error(...a) };
 // Signalement privé d'une faille, sur le dépôt : lu par le mainteneur.
-const CONTACT_SECURITE = 'https://github.com/CodexX64/sentinel-rmm/security/advisories/new';
+const CONTACT_SECURITE = 'https://github.com/CodexX64/nexarc/security/advisories/new';
 
 // Diffuseur d'activité en direct (SSE). Chaque flux ouvert reçoit les lignes ;
 // un flux fermé se retire de lui-même. Un flux tient une connexion ouverte :
@@ -48,10 +48,10 @@ class Flux {
 }
 
 export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
-  const cfg = lireConfigSentinel(env);
+  const cfg = lireConfigNexarc(env);
   const db = ouvrirBase(cfg.donnees);
   const socle = await demarrerSocle({
-    service: { id: 'sentinel', nom: 'Sentinel', contactSecurite: CONTACT_SECURITE }, db, dossier: cfg.donnees, env, log,
+    service: { id: 'nexarc', nom: 'NEXARC', contactSecurite: CONTACT_SECURITE }, db, dossier: cfg.donnees, env, log,
     migrer: ({ comptes, coffre }) => migrerComptes({ db, comptes, coffre, log }),
   });
   migrerParc({ db, log });
@@ -98,7 +98,7 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
   const cadres = [cfg.consoleUrl && new URL(cfg.consoleUrl).origin, cfg.meshEmbed && cfg.meshUrl && new URL(cfg.meshUrl).origin].filter(Boolean);
   const serveur = http.createServer(envelopper(async (req, res) => {
     try {
-      const url = new URL(req.url, 'http://sentinel');
+      const url = new URL(req.url, 'http://nexarc');
       const ctx = socle.portail.contexte(req, res);
       if (!debit.prendre(ctx.ip)) { socle.journal.rare(`debit:${ctx.ip}`, { action: 'limite.atteinte', objet: 'requetes', ip: ctx.ip, resultat: 'refus' }); throw new ErreurHttp(429, 'Trop de requêtes.'); }
       ctx.url = url;
@@ -116,7 +116,7 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
 
   serveur.on('upgrade', async (req, socket) => {
     try {
-      const url = new URL(req.url, 'http://sentinel');
+      const url = new URL(req.url, 'http://nexarc');
       // Une mise à niveau compte dans le débit de l'adresse, comme une requête.
       if (!debit.prendre(adresseClient(req, socle.portail.proxys))) return refuser(socket, 429, 'Too Many Requests');
       const v = verifierUpgrade(req, { origines: origines(req) });
@@ -159,13 +159,13 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
   serveur.requestTimeout = 0;      // les flux SSE et WebSocket durent
   serveur.keepAliveTimeout = 5000;
   await new Promise(r => serveur.listen(cfg.port, cfg.hote, r));
-  log.info(`Sentinel ${VERSION} à l'écoute sur ${cfg.hote}:${serveur.address().port}`);
+  log.info(`NEXARC ${VERSION} à l'écoute sur ${cfg.hote}:${serveur.address().port}`);
   if (consoles) {
     await consoles.ecouter(cfg.consolePort, cfg.hote);
     log.info(`Consoles web sur ${cfg.hote}:${consoles.serveur.address().port}, servies à ${consoles.origine}`);
     const hoteConsoles = new URL(consoles.origine).hostname;
     if ([cfg.urlEnrolement, socle.cfg.urlPublique].some(u => u && new URL(u).hostname === hoteConsoles)) {
-      log.warn?.(`SENTINEL_CONSOLE_URL partage le nom d'hôte de Sentinel : les scripts des cartes restent à part, pas les cookies. Donne-lui son propre nom (README, « Consoles et cartes de gestion »).`);
+      log.warn?.(`NEXARC_CONSOLE_URL partage le nom d'hôte de NEXARC : les scripts des cartes restent à part, pas les cookies. Donne-lui son propre nom (README, « Consoles et cartes de gestion »).`);
     }
   }
   const arreter = () => new Promise(r => { socle.arreter(); clearInterval(bCollecte); clearInterval(bAutos); clearInterval(bPurge); consoles?.arreter(); serveur.close(() => { db.close(); r(); }); serveur.closeAllConnections?.(); });

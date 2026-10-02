@@ -1,9 +1,9 @@
-"""Essais de l'agent Sentinel (unittest, bibliothèque standard).
+"""Essais de l'agent NEXARC (unittest, bibliothèque standard).
 
     python3 -m unittest agent/test_agent.py
 
 Le point central : la vérification TLS. Sans empreinte épinglée, l'autorité
-(système ou fichier SENTINEL_CA) vérifie toujours ; verify=False n'apparaît
+(système ou fichier NEXARC_CA) vérifie toujours ; verify=False n'apparaît
 qu'avec une empreinte bien formée, et alors seul le certificat épinglé passe.
 Prouvé contre un vrai serveur HTTPS local, pas sur des objets simulés.
 
@@ -30,7 +30,7 @@ RACINE = os.path.dirname(ICI)
 # Le serveur d'essai est local : aucun relais sortant ne doit s'interposer.
 os.environ['NO_PROXY'] = os.environ['no_proxy'] = '127.0.0.1,localhost'
 
-spec = importlib.util.spec_from_file_location('sentinel_agent', os.path.join(ICI, 'sentinel-agent.py'))
+spec = importlib.util.spec_from_file_location('nexarc_agent', os.path.join(ICI, 'nexarc-agent.py'))
 agent = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(agent)
 
@@ -160,7 +160,7 @@ class Posture(unittest.TestCase):
 
 
 class Enregistre(BaseHTTPRequestHandler):
-    """Serveur Sentinel minimal : note chaque requête, répond comme le vrai."""
+    """Serveur NEXARC minimal : note chaque requête, répond comme le vrai."""
     recues = []
 
     def do_POST(self):  # noqa: N802 — nom imposé par http.server
@@ -229,10 +229,10 @@ class Durcissement(unittest.TestCase):
     def test_dossier_windows_ferme_aux_utilisateurs_par_acl(self):
         appels, avant = [], (agent.IS_WIN, agent.run, agent.CONFIG_DIR)
         try:
-            agent.IS_WIN, agent.CONFIG_DIR = True, r'C:\ProgramData\SentinelAgent'
+            agent.IS_WIN, agent.CONFIG_DIR = True, r'C:\ProgramData\NexarcAgent'
             agent.run = lambda cmd, timeout=25, env=None: (appels.append(cmd), (0, ''))[1]
             agent.restreindre_dossier()
-            self.assertEqual(appels, [['icacls', r'C:\ProgramData\SentinelAgent', '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F']])
+            self.assertEqual(appels, [['icacls', r'C:\ProgramData\NexarcAgent', '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F']])
             agent.run = lambda cmd, timeout=25, env=None: (5, 'Accès refusé')
             with self.assertRaises(OSError):
                 agent.restreindre_dossier()
@@ -244,7 +244,7 @@ class Durcissement(unittest.TestCase):
         avant = agent.CONFIG_DIR, agent.CONFIG_FILE
         try:
             agent.CONFIG_DIR, agent.CONFIG_FILE = dossier, os.path.join(dossier, 'agent.json')
-            agent.ecrire_config({'url': 'https://sentinel.exemple.org', 'token': 'sag_essai'})
+            agent.ecrire_config({'url': 'https://nexarc.exemple.org', 'token': 'sag_essai'})
             self.assertEqual(stat.S_IMODE(os.stat(agent.CONFIG_FILE).st_mode), 0o600)
             self.assertEqual(stat.S_IMODE(os.stat(dossier).st_mode), 0o700)
         finally:

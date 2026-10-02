@@ -1,4 +1,4 @@
-// Ce que Sentinel raconte à SYNAPSE, tout seul : une machine réelle enrôlée,
+// Ce que NEXARC raconte à SYNAPSE, tout seul : une machine réelle enrôlée,
 // perdue de vue ou revenue ; une alerte ouverte ou résolue ; le résultat d'une
 // tâche (jamais sa sortie) ; chaque passage d'une automatisation ; un réveil ou
 // une action d'alimentation demandés par un opérateur.
@@ -19,7 +19,7 @@ export class Synapse {
 
   raconter(kind, titre, { corps = '', tags = [], meta = null } = {}) {
     if (!this.pret) return;
-    const e = { kind, title: String(titre).slice(0, 300), tags: [...new Set(['sentinel', ...tags])].sort(), occurred_at: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z') };
+    const e = { kind, title: String(titre).slice(0, 300), tags: [...new Set(['nexarc', ...tags])].sort(), occurred_at: new Date().toISOString().replace(/\.\d{3}Z$/, '.000Z') };
     if (corps) e.body = String(corps).slice(0, 2000);
     if (meta) e.meta = meta;
     this.file.push(e);

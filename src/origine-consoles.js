@@ -1,8 +1,8 @@
 // Origine des consoles web : l'interface d'une carte de gestion (iDRAC, iLO,
-// JetKVM, hyperviseur…) s'affiche dans Sentinel sans jamais s'exécuter sous
-// l'origine de Sentinel. Le code d'une carte n'est pas le nôtre : servi depuis
+// JetKVM, hyperviseur…) s'affiche dans NEXARC sans jamais s'exécuter sous
+// l'origine de NEXARC. Le code d'une carte n'est pas le nôtre : servi depuis
 // cette origine, il y lirait l'API avec la session de l'opérateur. Il est donc
-// servi par un second écouteur (SENTINEL_CONSOLE_URL) où rien de Sentinel ne
+// servi par un second écouteur (NEXARC_CONSOLE_URL) où rien de NEXARC ne
 // vit : ni page, ni API, ni session.
 //
 // Chaque ouverture tire une passe de 256 bits, liée à la session qui l'a

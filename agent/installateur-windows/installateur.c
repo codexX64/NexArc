@@ -1,11 +1,11 @@
 /*
- * Sentinel - installateur Windows de l'agent.
+ * NEXARC - installateur Windows de l'agent.
  *
- * Un seul exécutable générique, compilé à la construction de l'image. Sentinel
+ * Un seul exécutable générique, compilé à la construction de l'image. NEXARC
  * lui colle en fin de fichier, à chaque téléchargement, l'adresse du script
  * d'installation (code d'inscription compris) :
  *
- *     [exécutable][adresse UTF-8][longueur, 4 octets LE]["SNTLINS1"]
+ *     [exécutable][adresse UTF-8][longueur, 4 octets LE]["NXRCINS1"]
  *
  * L'exécutable relit cette fin, vérifie l'adresse caractère par caractère
  * (rien qui puisse sortir des apostrophes de PowerShell), puis lance le même
@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MAGIE "SNTLINS1"
+#define MAGIE "NXRCINS1"
 #define ADRESSE_MAX 2048
 
 static int caractere_admis(unsigned char c) {
@@ -40,7 +40,7 @@ static int echec(const char *message) {
 
 int main(void) {
   SetConsoleOutputCP(CP_UTF8);
-  printf("Sentinel - installation de l'agent\n\n");
+  printf("NEXARC - installation de l'agent\n\n");
 
   wchar_t chemin[MAX_PATH * 4];
   DWORD n = GetModuleFileNameW(NULL, chemin, sizeof chemin / sizeof chemin[0]);
@@ -55,18 +55,18 @@ int main(void) {
   DWORD lus = 0;
   LARGE_INTEGER pos; pos.QuadPart = taille.QuadPart - 12;
   if (!SetFilePointerEx(f, pos, NULL, FILE_BEGIN) || !ReadFile(f, fin, 12, &lus, NULL) || lus != 12) { CloseHandle(f); return echec("fin de l'installateur illisible."); }
-  if (memcmp(fin + 4, MAGIE, 8) != 0) { CloseHandle(f); return echec("cet installateur ne porte aucune adresse : telecharge-le depuis Sentinel (Postes, Ajouter un poste)."); }
+  if (memcmp(fin + 4, MAGIE, 8) != 0) { CloseHandle(f); return echec("cet installateur ne porte aucune adresse : telecharge-le depuis NEXARC (Postes, Ajouter un poste)."); }
   DWORD longueur = (DWORD)fin[0] | ((DWORD)fin[1] << 8) | ((DWORD)fin[2] << 16) | ((DWORD)fin[3] << 24);
-  if (longueur < 12 || longueur > ADRESSE_MAX || (LONGLONG)longueur > taille.QuadPart - 12) { CloseHandle(f); return echec("adresse de Sentinel invalide."); }
+  if (longueur < 12 || longueur > ADRESSE_MAX || (LONGLONG)longueur > taille.QuadPart - 12) { CloseHandle(f); return echec("adresse de NEXARC invalide."); }
 
   char adresse[ADRESSE_MAX + 1];
   pos.QuadPart = taille.QuadPart - 12 - longueur;
-  if (!SetFilePointerEx(f, pos, NULL, FILE_BEGIN) || !ReadFile(f, adresse, longueur, &lus, NULL) || lus != longueur) { CloseHandle(f); return echec("adresse de Sentinel illisible."); }
+  if (!SetFilePointerEx(f, pos, NULL, FILE_BEGIN) || !ReadFile(f, adresse, longueur, &lus, NULL) || lus != longueur) { CloseHandle(f); return echec("adresse de NEXARC illisible."); }
   CloseHandle(f);
   adresse[longueur] = 0;
 
-  if (strncmp(adresse, "https://", 8) != 0 && strncmp(adresse, "http://", 7) != 0) return echec("adresse de Sentinel invalide.");
-  for (DWORD i = 0; i < longueur; i++) if (!caractere_admis((unsigned char)adresse[i])) return echec("adresse de Sentinel invalide.");
+  if (strncmp(adresse, "https://", 8) != 0 && strncmp(adresse, "http://", 7) != 0) return echec("adresse de NEXARC invalide.");
+  for (DWORD i = 0; i < longueur; i++) if (!caractere_admis((unsigned char)adresse[i])) return echec("adresse de NEXARC invalide.");
 
   wchar_t systeme[MAX_PATH];
   UINT ls = GetSystemDirectoryW(systeme, MAX_PATH);
@@ -82,7 +82,7 @@ int main(void) {
     powershell, adresse);
   if (ecrits < 0) return echec("commande trop longue.");
 
-  printf("Sentinel : %s\n\n", strtok(adresse, "?"));
+  printf("NEXARC : %s\n\n", strtok(adresse, "?"));
   STARTUPINFOW si; PROCESS_INFORMATION pi;
   ZeroMemory(&si, sizeof si); si.cb = sizeof si; ZeroMemory(&pi, sizeof pi);
   if (!CreateProcessW(powershell, ligne, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) return echec("PowerShell n'a pas pu etre lance.");

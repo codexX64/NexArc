@@ -20,7 +20,7 @@ const BASE = /^https?:\/\/(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+)(:\d{1,5})?(\/[A-Za
 // Refuse ce qui ne peut pas entrer tel quel dans un script (renvoie un message).
 // Sans code (avant qu'il soit tiré), seuls l'adresse, le site et le nom comptent.
 export function controler(base, { code = null, site = '', nom = '' } = {}) {
-  if (!BASE.test(base)) return 'Adresse de Sentinel inutilisable dans un script : pose SENTINEL_PUBLIC_URL.';
+  if (!BASE.test(base)) return 'Adresse de NEXARC inutilisable dans un script : pose NEXARC_PUBLIC_URL.';
   if (code !== null && !CODE_INSCRIPTION.test(code)) return 'Code d\'inscription invalide.';
   if (!LIBELLE.test(site) || !LIBELLE.test(nom)) return 'Site ou nom : lettres, chiffres, espace, point, tiret, parenthèses (60 au plus).';
   return null;
@@ -30,44 +30,44 @@ const sansBarreFinale = b => b.replace(/\/+$/, '');
 
 function scriptLinux(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
   return `#!/usr/bin/env bash
-# Sentinel — installation de l'agent (Linux, systemd). Lance avec sudo.
+# NEXARC — installation de l'agent (Linux, systemd). Lance avec sudo.
 set -euo pipefail
 URL='${sansBarreFinale(base)}'; CODE='${code}'; SITE='${site}'; NOM='${nom}'; RELAIS='${relais ? '1' : '0'}'
-DIR=/opt/sentinel-agent
+DIR=/opt/nexarc-agent
 [ "$(id -u)" -eq 0 ] || { echo "Lance ce script avec sudo."; exit 1; }
 echo "→ Dépendances"
 if command -v apt-get >/dev/null; then apt-get update -qq && apt-get install -y -qq python3 python3-venv curl
 elif command -v dnf >/dev/null; then dnf install -y -q python3 curl
 elif command -v pacman >/dev/null; then pacman -Sy --noconfirm python curl; fi
 mkdir -p "$DIR"; chmod 700 "$DIR"
-curl -fsSL "$URL/api/enroll/agent.py?code=$CODE" -o "$DIR/sentinel-agent.py"
+curl -fsSL "$URL/api/enroll/agent.py?code=$CODE" -o "$DIR/nexarc-agent.py"
 curl -fsSL "$URL/api/enroll/requirements.txt?code=$CODE" -o "$DIR/requirements.txt"
 python3 -m venv "$DIR/venv"
 # Versions fixées, chaque paquet vérifié par son empreinte avant installation.
 "$DIR/venv/bin/pip" install -q --require-hashes --prefer-binary -r "$DIR/requirements.txt"
 # L'agent échange le code, range son jeton en 0600, s'installe en service.
-SENTINEL_URL="$URL" SENTINEL_ENROLL_CODE="$CODE" SENTINEL_SITE="$SITE" SENTINEL_NAME="$NOM" SENTINEL_RELAY="$RELAIS" \\
-  "$DIR/venv/bin/python" "$DIR/sentinel-agent.py" --enroller
+NEXARC_URL="$URL" NEXARC_ENROLL_CODE="$CODE" NEXARC_SITE="$SITE" NEXARC_NAME="$NOM" NEXARC_RELAY="$RELAIS" \\
+  "$DIR/venv/bin/python" "$DIR/nexarc-agent.py" --enroller
 echo "✓ Terminé — le poste doit apparaître dans la console sous une minute."
 `;
 }
 
 function scriptMacos(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
   return `#!/usr/bin/env bash
-# Sentinel — installation de l'agent (macOS, launchd). Lance avec sudo.
+# NEXARC — installation de l'agent (macOS, launchd). Lance avec sudo.
 set -euo pipefail
 URL='${sansBarreFinale(base)}'; CODE='${code}'; SITE='${site}'; NOM='${nom}'; RELAIS='${relais ? '1' : '0'}'
-DIR=/usr/local/sentinel-agent
+DIR=/usr/local/nexarc-agent
 [ "$(id -u)" -eq 0 ] || { echo "Lance ce script avec sudo."; exit 1; }
 command -v python3 >/dev/null || { echo "python3 requis (xcode-select --install)"; exit 1; }
 mkdir -p "$DIR"; chmod 700 "$DIR"
-curl -fsSL "$URL/api/enroll/agent.py?code=$CODE" -o "$DIR/sentinel-agent.py"
+curl -fsSL "$URL/api/enroll/agent.py?code=$CODE" -o "$DIR/nexarc-agent.py"
 curl -fsSL "$URL/api/enroll/requirements.txt?code=$CODE" -o "$DIR/requirements.txt"
 python3 -m venv "$DIR/venv"
 # Versions fixées, chaque paquet vérifié par son empreinte avant installation.
 "$DIR/venv/bin/pip" install -q --require-hashes --prefer-binary -r "$DIR/requirements.txt"
-SENTINEL_URL="$URL" SENTINEL_ENROLL_CODE="$CODE" SENTINEL_SITE="$SITE" SENTINEL_NAME="$NOM" SENTINEL_RELAY="$RELAIS" \\
-  "$DIR/venv/bin/python" "$DIR/sentinel-agent.py" --enroller
+NEXARC_URL="$URL" NEXARC_ENROLL_CODE="$CODE" NEXARC_SITE="$SITE" NEXARC_NAME="$NOM" NEXARC_RELAY="$RELAIS" \\
+  "$DIR/venv/bin/python" "$DIR/nexarc-agent.py" --enroller
 echo "✓ Terminé — le poste doit apparaître dans la console sous une minute."
 `;
 }
@@ -77,11 +77,11 @@ echo "✓ Terminé — le poste doit apparaître dans la console sous une minute
 // tâche planifiée SYSTEM au démarrage. Une commande native qui échoue ne lève
 // rien en PowerShell : chaque étape vérifie $LASTEXITCODE.
 function scriptWindows(base, code, { site = 'Agents', nom = '', relais = false } = {}) {
-  return `# Sentinel - installation de l'agent (Windows). PowerShell en administrateur :
-#   powershell -ExecutionPolicy Bypass -File .\\installer-sentinel.ps1
+  return `# NEXARC - installation de l'agent (Windows). PowerShell en administrateur :
+#   powershell -ExecutionPolicy Bypass -File .\\installer-nexarc.ps1
 $ErrorActionPreference = "Stop"
 $Url = '${sansBarreFinale(base)}'; $Code = '${code}'; $Site = '${site}'; $Nom = '${nom}'; $Relais = '${relais ? '1' : '0'}'
-$Dir = "$env:ProgramData\\SentinelAgent"
+$Dir = "$env:ProgramData\\NexarcAgent"
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
   Write-Error "Relance PowerShell en tant qu'administrateur."; exit 1
 }
@@ -110,14 +110,14 @@ if (-not $Py) {
 }
 if (-not $Py) { Write-Error "Python 3 introuvable. Installe-le puis relance ce script."; exit 1 }
 $PyArgs = if ((Split-Path $Py -Leaf) -eq "py.exe") { @("-3") } else { @() }
-Unregister-ScheduledTask -TaskName "SentinelAgent" -Confirm:$false -ErrorAction SilentlyContinue
+Unregister-ScheduledTask -TaskName "NexarcAgent" -Confirm:$false -ErrorAction SilentlyContinue
 Write-Host "-> Agent dans $Dir"
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null
 # Le jeton de l'agent sera rangé ici : SYSTEM et les administrateurs seuls, sans
 # la lecture pour tous que ProgramData transmet par héritage.
 icacls $Dir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" | Out-Null
 if ($LASTEXITCODE -ne 0) { Write-Error "Droits du dossier de l'agent non posés."; exit 1 }
-Invoke-WebRequest -Uri "$Url/api/enroll/agent.py?code=$Code" -OutFile "$Dir\\sentinel-agent.py" -UseBasicParsing
+Invoke-WebRequest -Uri "$Url/api/enroll/agent.py?code=$Code" -OutFile "$Dir\\nexarc-agent.py" -UseBasicParsing
 Invoke-WebRequest -Uri "$Url/api/enroll/requirements.txt?code=$Code" -OutFile "$Dir\\requirements.txt" -UseBasicParsing
 & $Py @PyArgs -m venv "$Dir\\venv"
 if ($LASTEXITCODE -ne 0) { Write-Error "Environnement virtuel non créé."; exit 1 }
@@ -125,18 +125,18 @@ if ($LASTEXITCODE -ne 0) { Write-Error "Environnement virtuel non créé."; exit
 & "$Dir\\venv\\Scripts\\python.exe" -m pip install -q --require-hashes --prefer-binary -r "$Dir\\requirements.txt"
 if ($LASTEXITCODE -ne 0) { Write-Error "Dépendances de l'agent non installées."; exit 1 }
 Write-Host "-> Inscription et tâche planifiée"
-$env:SENTINEL_URL = $Url; $env:SENTINEL_ENROLL_CODE = $Code; $env:SENTINEL_SITE = $Site; $env:SENTINEL_NAME = $Nom; $env:SENTINEL_RELAY = $Relais
-& "$Dir\\venv\\Scripts\\python.exe" "$Dir\\sentinel-agent.py" --enroller
+$env:NEXARC_URL = $Url; $env:NEXARC_ENROLL_CODE = $Code; $env:NEXARC_SITE = $Site; $env:NEXARC_NAME = $Nom; $env:NEXARC_RELAY = $Relais
+& "$Dir\\venv\\Scripts\\python.exe" "$Dir\\nexarc-agent.py" --enroller
 if ($LASTEXITCODE -ne 0) { Write-Error "Inscription refusée ou console injoignable : rien n'a été posé en service."; exit 1 }
-Remove-Item Env:SENTINEL_ENROLL_CODE
+Remove-Item Env:NEXARC_ENROLL_CODE
 Write-Host "OK - le poste doit apparaitre dans la console sous une minute."
 `;
 }
 
 export const BUILDERS = {
-  linux: [scriptLinux, 'installer-sentinel.sh', 'text/x-shellscript'],
-  macos: [scriptMacos, 'installer-sentinel.command', 'text/x-shellscript'],
-  windows: [scriptWindows, 'installer-sentinel.ps1', 'text/plain'],
+  linux: [scriptLinux, 'installer-nexarc.sh', 'text/x-shellscript'],
+  macos: [scriptMacos, 'installer-nexarc.command', 'text/x-shellscript'],
+  windows: [scriptWindows, 'installer-nexarc.ps1', 'text/plain'],
 };
 
 // L'adresse du script d'installation, code compris. Ses valeurs ont passé
@@ -159,7 +159,7 @@ export function uneLigne(os, base, code, options = {}) {
 // Windows : l'exécutable générique (agent/installateur-windows), suivi de
 // l'adresse du script, de sa longueur et d'une marque. L'exécutable relit
 // cette fin, revérifie l'adresse et lance le script avec élévation.
-export const MARQUE_WINDOWS = Buffer.from('SNTLINS1', 'latin1');
+export const MARQUE_WINDOWS = Buffer.from('NXRCINS1', 'latin1');
 export function installateurWindows(executable, url) {
   const adresse = Buffer.from(url, 'utf8');
   const longueur = Buffer.alloc(4);
@@ -172,18 +172,18 @@ export function installateurWindows(executable, url) {
 // de l'ouvrir). Le fichier relance le script dans le Terminal, sous sudo.
 export function installateurMacos(script) {
   const commande = `#!/bin/bash
-# Sentinel - installation de l'agent sur ce Mac. Double-clique : le Terminal
+# NEXARC - installation de l'agent sur ce Mac. Double-clique : le Terminal
 # s'ouvre et demande le mot de passe d'un administrateur.
 cd "$(dirname "$0")"
-TMP="$(mktemp -t sentinel-installation)"
+TMP="$(mktemp -t nexarc-installation)"
 trap 'rm -f "$TMP"' EXIT
-cat > "$TMP" <<'SENTINEL_FIN_DU_SCRIPT'
-${script}SENTINEL_FIN_DU_SCRIPT
+cat > "$TMP" <<'NEXARC_FIN_DU_SCRIPT'
+${script}NEXARC_FIN_DU_SCRIPT
 sudo /bin/bash "$TMP"
 echo
 read -r -p "Appuie sur Entrée pour fermer." _
 `;
-  return zipUnFichier('Installer Sentinel.command', Buffer.from(commande, 'utf8'), 0o755);
+  return zipUnFichier('Installer NEXARC.command', Buffer.from(commande, 'utf8'), 0o755);
 }
 
 // Une archive zip d'un seul fichier, stocké sans compression (la méthode 0 que
@@ -211,7 +211,7 @@ function zipUnFichier(nom, donnees, mode) {
 }
 
 export const INSTALLATEURS = {
-  windows: { fichier: 'installer-sentinel.exe', media: 'application/vnd.microsoft.portable-executable' },
-  macos: { fichier: 'installer-sentinel-macos.zip', media: 'application/zip' },
-  linux: { fichier: 'installer-sentinel.sh', media: 'text/x-shellscript' },
+  windows: { fichier: 'installer-nexarc.exe', media: 'application/vnd.microsoft.portable-executable' },
+  macos: { fichier: 'installer-nexarc-macos.zip', media: 'application/zip' },
+  linux: { fichier: 'installer-nexarc.sh', media: 'text/x-shellscript' },
 };

@@ -22,8 +22,8 @@ import { urlBureau, nodeValide } from '../src/mesh.js';
 import https from 'node:https';
 
 const JETON_HUB = 'jeton-du-hub-pour-les-essais-0123456789';
-const INSTALL = 'jeton-installation-sentinel-essai';
-const JETON_SYNAPSE = 'cer_sentinel_jeton-de-cerveau-des-essais';
+const INSTALL = 'jeton-installation-nexarc-essai';
+const JETON_SYNAPSE = 'cer_nexarc_jeton-de-cerveau-des-essais';
 const SILENCE = { info() {}, warn() {}, error() {} };
 let s, syn, admin, membre, autre, lecteur, base, env;
 
@@ -40,10 +40,10 @@ async function portLibre() {
 async function lancer(dossier, extra = {}) {
   const consoles = await portLibre();
   env = {
-    PORT: '0', HOTE: '127.0.0.1', DATA_DIR: dossier, SENTINEL_HUB_TOKEN: JETON_HUB, SENTINEL_ALLOW_EXEC: '1',
+    PORT: '0', HOTE: '127.0.0.1', DATA_DIR: dossier, NEXARC_HUB_TOKEN: JETON_HUB, NEXARC_ALLOW_EXEC: '1',
     SOCLE_CLE: crypto.randomBytes(32).toString('base64'), SOCLE_JETON_INSTALLATION: INSTALL,
     SYNAPSE_URL: syn.url, SYNAPSE_JETON: JETON_SYNAPSE,
-    SENTINEL_CONSOLE_PORT: String(consoles), SENTINEL_CONSOLE_URL: `http://localhost:${consoles}`, ...extra,
+    NEXARC_CONSOLE_PORT: String(consoles), NEXARC_CONSOLE_URL: `http://localhost:${consoles}`, ...extra,
   };
   const x = await demarrer(env, { log: SILENCE });
   return { ...x, port: x.serveur.address().port, client: () => new Client(x.serveur.address().port) };
@@ -95,7 +95,7 @@ async function ecouter(client) {
 
 before(async () => {
   syn = await fauxSynapse(JETON_SYNAPSE);
-  base = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-'));
+  base = fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-'));
   s = await lancer(base);
   admin = s.client();
   await adminComplet(admin, { jeton: INSTALL });
@@ -123,12 +123,12 @@ test('en-têtes de sécurité, nonce, health anonyme minimal, pas de page de doc
 });
 
 test('derrière un relais HTTPS déclaré : HSTS, cookie __Host- sécurisé, et la même session ouvre les WebSockets', async () => {
-  const relaye = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-r-')), { SOCLE_PROXYS: '127.0.0.1/32' });
+  const relaye = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-r-')), { SOCLE_PROXYS: '127.0.0.1/32' });
   try {
     // Un vrai nom public derrière le relais, comme en production (pas localhost,
     // que le navigateur et le socle traitent à part).
-    const h = { host: 'sentinel.exemple.org', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' };
-    const origine = 'https://sentinel.exemple.org';
+    const h = { host: 'nexarc.exemple.org', 'x-forwarded-proto': 'https', 'x-forwarded-for': '203.0.113.7' };
+    const origine = 'https://nexarc.exemple.org';
     // Chaque requête de ce client passe « par le relais ».
     class ClientRelaye extends Client {
       constructor(port) { super(port); this.origine = origine; }
@@ -138,7 +138,7 @@ test('derrière un relais HTTPS déclaré : HSTS, cookie __Host- sécurisé, et 
     const r = await c.req('POST', '/api/compte/installation', { jeton: INSTALL, identifiant: 'ana', motDePasse: MDP_ESSAI });
     assert.equal(r.status, 200, JSON.stringify(r.json));
     assert.match(r.entetes['strict-transport-security'], /max-age=\d{8,}; includeSubDomains/);
-    const cookie = r.setCookie.find(x => x.startsWith('__Host-sentinel-sid='));
+    const cookie = r.setCookie.find(x => x.startsWith('__Host-nexarc-sid='));
     assert.ok(cookie, r.setCookie.join(' | '));
     for (const attr of ['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/']) assert.ok(cookie.includes(attr), attr);
     const auth = new (await import('../socle/essai/authentificateur.js')).Authentificateur();
@@ -150,8 +150,8 @@ test('derrière un relais HTTPS déclaré : HSTS, cookie __Host- sécurisé, et 
     // La mise à niveau WebSocket reconnaît le cookie __Host- : autorisée, puis
     // 404 (aucune machine). Sans cookie : 401.
     const ws = { Host: h.host, 'X-Forwarded-Proto': 'https', 'X-Forwarded-For': h['x-forwarded-for'], Origin: origine };
-    const jeton = c.cookies.get('__Host-sentinel-sid');
-    assert.match(await brancherWs(relaye.port, '/vnc/AAAAAAAAAAAAAAAA/0', { ...ws, Cookie: `__Host-sentinel-sid=${jeton}` }), / 404 /);
+    const jeton = c.cookies.get('__Host-nexarc-sid');
+    assert.match(await brancherWs(relaye.port, '/vnc/AAAAAAAAAAAAAAAA/0', { ...ws, Cookie: `__Host-nexarc-sid=${jeton}` }), / 404 /);
     assert.match(await brancherWs(relaye.port, '/vnc/AAAAAAAAAAAAAAAA/0', ws), / 401 /);
   } finally { await relaye.arreter(); }
 });
@@ -188,7 +188,7 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
   const admin = s.api.routeur.routes.filter(r => r.options?.role === 'admin').map(r => `${r.methode} ${cheminDe(r)}`).sort();
   assert.deepEqual(admin, ['DELETE /api/automations/AAAAAAAAAAAAAAAA', 'DELETE /api/machines/AAAAAAAAAAAAAAAA', 'GET /api/machines/AAAAAAAAAAAAAAAA/pin', 'POST /api/hosts', 'POST /api/machines/AAAAAAAAAAAAAAAA/pin',
     'PUT /api/machines/AAAAAAAAAAAAAAAA/consoles', 'PUT /api/machines/AAAAAAAAAAAAAAAA/mesh-node', 'PUT /api/machines/AAAAAAAAAAAAAAAA/redfish']);
-  // Aucune console n'est plus servie sous l'origine de Sentinel.
+  // Aucune console n'est plus servie sous l'origine de NEXARC.
   assert.equal((await membre.get('/console/AAAAAAAAAAAAAAAA/0/')).status, 404);
   // Paramètres : une référence mal formée ne désigne rien ; un paramètre de
   // requête non déclaré, ou hors de ses valeurs, est refusé.
@@ -271,7 +271,7 @@ test('sauvegarde chiffrée pour une clé publique, restaurée ailleurs avec la c
   const sauv = cli(['sauvegarde'], { entree: publicKey });
   assert.equal(sauv.status, 0, String(sauv.stderr));
   assert.ok(!sauv.stdout.includes(Buffer.from('poste-revoque')) && !sauv.stdout.includes(Buffer.from('SQLite format')), 'rien en clair');
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-restauration-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-restauration-'));
   const prive = path.join(d, 'prive.pem'), autre = path.join(d, 'autre.pem'), cible = path.join(d, 'restauree.db');
   fs.writeFileSync(prive, privateKey);
   fs.writeFileSync(autre, paire().privateKey);
@@ -287,7 +287,7 @@ test('sauvegarde chiffrée pour une clé publique, restaurée ailleurs avec la c
 });
 
 test('codes et jetons de machine : chaque échec compte pour l\'adresse, bloquée après dix, à part des connexions humaines', async () => {
-  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-echecs-')));
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-echecs-')));
   try {
     const c = x.client();
     const machine = { origine: null };
@@ -307,7 +307,7 @@ test('codes et jetons de machine : chaque échec compte pour l\'adresse, bloqué
 });
 
 test('volumes : flux d\'activité, automatisations et mises à niveau WebSocket bornés ; jeton d\'agent inconnu refusé avant le corps', async () => {
-  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-volumes-')));
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-volumes-')));
   const ouverts = [];
   try {
     const a = x.client();
@@ -503,11 +503,11 @@ test('consoles : mot de passe VNC scellé (admin+renfort), jamais rendu ; la cib
   assert.ok(!trace.details.includes('motdepasse-vnc'), 'jamais le secret au journal');
 });
 
-test('origine des consoles : la carte s\'affiche hors de l\'origine de Sentinel, par une passe liée à la session', async () => {
+test('origine des consoles : la carte s\'affiche hors de l\'origine de NEXARC, par une passe liée à la session', async () => {
   const recus = [];
   const carte = await fauxCarte((req, res) => {
     recus.push({ url: req.url, cookie: req.headers.cookie || '' });
-    res.setHeader('Set-Cookie', ['session-carte=posee; Path=/', 'sentinel-sid=volee; Path=/', '__Host-autre=x; Path=/; Secure']);
+    res.setHeader('Set-Cookie', ['session-carte=posee; Path=/', 'nexarc-sid=volee; Path=/', '__Host-autre=x; Path=/; Secure']);
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Content-Type', 'text/html');
     res.end('<html><head></head><body><img src="/logo.png">carte</body></html>');
@@ -534,17 +534,17 @@ test('origine des consoles : la carte s\'affiche hors de l\'origine de Sentinel,
     assert.ok(!trace.details.includes(u.pathname.slice(3, -1)), 'jamais la passe au journal');
 
     const vitrine = new Client(Number(u.port));
-    // Un navigateur n'enverrait pas les cookies de Sentinel à une autre origine ;
+    // Un navigateur n'enverrait pas les cookies de NEXARC à une autre origine ;
     // s'il le faisait, ils ne partiraient pas vers la carte, seuls ou avec les siens.
-    vitrine.cookies.set('sentinel-sid', victor.cookies.get('sentinel-sid'));
+    vitrine.cookies.set('nexarc-sid', victor.cookies.get('nexarc-sid'));
     assert.equal((await vitrine.get(u.pathname)).status, 200);
-    assert.equal(recus.at(-1).cookie, '', 'aucun cookie de Sentinel ne part vers la carte');
+    assert.equal(recus.at(-1).cookie, '', 'aucun cookie de NEXARC ne part vers la carte');
     vitrine.cookies.set('session-carte', 'ouverte');
     const page = await vitrine.get(u.pathname);
     assert.equal(page.status, 200, page.texte.slice(0, 200));
     assert.equal(recus.at(-1).cookie, 'session-carte=ouverte', 'seul le cookie de la carte lui parvient');
     assert.deepEqual(page.setCookie.map(c => c.split('=')[0]), ['session-carte'], 'la carte ne pose aucun cookie au nom du service');
-    assert.equal(page.entetes['content-security-policy'], `frame-ancestors ${victor.origine}`, 'seule la page de Sentinel qui a tiré la passe l\'encadre');
+    assert.equal(page.entetes['content-security-policy'], `frame-ancestors ${victor.origine}`, 'seule la page de NEXARC qui a tiré la passe l\'encadre');
     assert.equal(page.entetes['x-frame-options'], undefined);
     assert.equal(page.entetes['x-content-type-options'], 'nosniff');
     assert.equal(page.entetes['cache-control'], 'no-store');
@@ -555,12 +555,12 @@ test('origine des consoles : la carte s\'affiche hors de l\'origine de Sentinel,
     const script = await vitrine.get('/reancrage.js');
     assert.equal(script.status, 200);
     assert.match(script.entetes['content-type'], /^text\/javascript/);
-    // Rien de Sentinel ne vit sur cette origine, et une passe inventée n'ouvre rien.
+    // Rien de NEXARC ne vit sur cette origine, et une passe inventée n'ouvre rien.
     for (const chemin of ['/', '/index.html', '/app.js', '/api/compte/etat', `/api/machines/${mref}`, `/c/${'A'.repeat(43)}/`]) {
       assert.equal((await vitrine.get(chemin)).status, 404, chemin);
     }
     assert.equal((await vitrine.post(`${u.pathname}connexion`, {}, { origine: victor.origine })).status, 403, 'une écriture ne vient que d\'une page de la console');
-    assert.equal((await s.client().get(`/c/${u.pathname.slice(3)}`)).status, 404, 'la passe ne vaut rien sur l\'origine de Sentinel');
+    assert.equal((await s.client().get(`/c/${u.pathname.slice(3)}`)).status, 404, 'la passe ne vaut rien sur l\'origine de NEXARC');
 
     // WebSocket de la carte, par la même passe et la même origine.
     assert.match(await brancherWs(Number(u.port), `${u.pathname}ws`, { Origin: victor.origine }), / 403 /, 'origine étrangère refusée');
@@ -639,7 +639,7 @@ test('écritures groupées : un passage d\'automatisation interrompu au milieu n
 });
 
 test('commande libre désactivée : ni créée, ni lancée, ni réactivée, ni exécutée par la ronde des automatisations', async () => {
-  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-noexec-')), { SENTINEL_ALLOW_EXEC: '0' });
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-noexec-')), { NEXARC_ALLOW_EXEC: '0' });
   try {
     const a = x.client();
     await adminComplet(a, { jeton: INSTALL });
@@ -648,8 +648,8 @@ test('commande libre désactivée : ni créée, ni lancée, ni réactivée, ni e
     assert.equal((await a.post(`/api/machines/${x.db.prepare("SELECT ref FROM machines WHERE host = 'poste-sans-cmd'").get().ref}/jobs`, { kind: 'cmd', payload: 'id' })).status, 403, 'ni en tâche');
     assert.equal((await a.post('/api/automations', { nom: 'Cmd', kind: 'cmd', payload: 'id', cible: 'tous' })).status, 403);
     const refus = x.db.prepare("SELECT objet, details FROM socle_journal WHERE action = 'acces.refuse' ORDER BY n DESC LIMIT 1").get();
-    assert.equal(refus.objet, '/api/automations', 'refus décidé par Sentinel, journalisé comme ceux du socle');
-    assert.match(refus.details, /SENTINEL_ALLOW_EXEC/);
+    assert.equal(refus.objet, '/api/automations', 'refus décidé par NEXARC, journalisé comme ceux du socle');
+    assert.match(refus.details, /NEXARC_ALLOW_EXEC/);
     // Une automatisation « commande libre » d'avant la désactivation (ou reprise de la 1.x).
     x.db.prepare("INSERT INTO automatisations(ref, nom, kind, payload, cible, toutes_h, heure, actif) VALUES('EEEEEEEEEEEEEEEE', 'Ancienne', 'cmd', 'id', 'tous', 1, 0, 0)").run();
     x.db.prepare("INSERT INTO automatisations(ref, nom, kind, payload, cible, toutes_h, heure, actif) VALUES('FFFFFFFFFFFFFFFF', 'Inventaire', 'inventory', '', 'tous', 1, 0, 1)").run();
@@ -691,8 +691,8 @@ test('données d\'un compte : export sous renfort (tâches lancées, alertes acq
   const r = await dora.get('/api/compte/export');
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(r.json.compte.identifiant, 'dora');
-  assert.deepEqual(r.json.sentinel.taches_lancees.map(x => [x.id, x.machine, x.kind, x.payload]), [[t.json.id, 'poste-dora', 'install', 'htop']]);
-  assert.deepEqual(r.json.sentinel.alertes_acquittees.map(x => [x.id, x.regle]), [[alerte, 'antivirus']]);
+  assert.deepEqual(r.json.nexarc.taches_lancees.map(x => [x.id, x.machine, x.kind, x.payload]), [[t.json.id, 'poste-dora', 'install', 'htop']]);
+  assert.deepEqual(r.json.nexarc.alertes_acquittees.map(x => [x.id, x.regle]), [[alerte, 'antivirus']]);
   const id = s.parc.db.prepare("SELECT id FROM socle_comptes WHERE identifiant='dora'").get().id;
   assert.equal((await dora.post('/api/compte/supprimer', { identifiant: 'dora' })).status, 200);
   assert.equal(s.parc.db.prepare('SELECT COUNT(*) n FROM socle_comptes WHERE id=?').get(id).n, 0);
@@ -741,11 +741,12 @@ test('SYNAPSE : une redirection n\'est jamais suivie, le jeton ne part qu\'à l\
 });
 
 test('migration 1.1.0 : comptes, machines, automatisations reprises ; l\'agent se réenrôle par son nom', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-v1-'));
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-v1-'));
+  // La 1.1.0 s'appelait Sentinel : sa base porte l'ancien nom.
   const db = new DatabaseSync(path.join(dossier, 'sentinel.db'));
-  // empreinte scrypt de la 1.x (format hashpw : scrypt$sel$empreinte) pour « ancienne phrase de passe sentinel ».
+  // empreinte scrypt de la 1.x (format hashpw : scrypt$sel$empreinte) pour « ancienne phrase de passe nexarc ».
   const sel = crypto.randomBytes(16);
-  const dk = crypto.scryptSync('ancienne phrase de passe sentinel', sel, 32, { N: 16384, r: 8, p: 1 });
+  const dk = crypto.scryptSync('ancienne phrase de passe nexarc', sel, 32, { N: 16384, r: 8, p: 1 });
   const empreinte = `scrypt$${sel.toString('hex')}$${dk.toString('hex')}`;
   db.exec(`CREATE TABLE auth(id INTEGER PRIMARY KEY CHECK(id=1), username TEXT, pw_hash TEXT, totp_secret TEXT, pending_secret TEXT, must_change INTEGER DEFAULT 1, tfa_enabled INTEGER DEFAULT 0);
     CREATE TABLE agents(id INTEGER PRIMARY KEY, host TEXT, ip TEXT, site TEXT, os TEXT, oskind TEXT, role TEXT, online INTEGER, risk INTEGER, cpu INTEGER, ram INTEGER, disk INTEGER, av TEXT, fw TEXT, enc TEXT, patch INTEGER, hist TEXT, source TEXT, last_report REAL, mesh_node TEXT, consoles TEXT, rf_url TEXT, rf_user TEXT, rf_secret TEXT, inventory TEXT, software TEXT, updates TEXT, mac TEXT, inv_at REAL);
@@ -761,6 +762,7 @@ test('migration 1.1.0 : comptes, machines, automatisations reprises ; l\'agent s
   try {
     const lignes = v1.serveur; void lignes;
     const dbv = v1.db;
+    assert.ok(fs.existsSync(path.join(dossier, 'nexarc.db')) && !fs.existsSync(path.join(dossier, 'sentinel.db')), 'base de Sentinel renommée nexarc.db');
     assert.deepEqual(dbv.prepare('SELECT identifiant, role FROM socle_comptes').all().map(r => ({ identifiant: r.identifiant, role: r.role })), [{ identifiant: 'operateur', role: 'admin' }]);
     const totp = dbv.prepare("SELECT totp FROM socle_comptes WHERE identifiant='operateur'").get().totp;
     assert.ok(totp.startsWith('v1.') && !totp.includes('JBSWY3DP'), 'TOTP scellé');
@@ -775,27 +777,27 @@ test('migration 1.1.0 : comptes, machines, automatisations reprises ; l\'agent s
     assert.equal(dbv.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name IN ('agents','auth','alerts')").get().n, 0, 'tables 1.x retirées');
     // l'opérateur se reconnecte avec l'ancien mot de passe (l'empreinte scrypt se relit)
     const c = new Client(v1.port);
-    const r = await c.post('/api/compte/connexion', { identifiant: 'operateur', motDePasse: 'ancienne phrase de passe sentinel', preuve: undefined });
+    const r = await c.post('/api/compte/connexion', { identifiant: 'operateur', motDePasse: 'ancienne phrase de passe nexarc', preuve: undefined });
     assert.ok([200, 428].includes(r.status), 'empreinte scrypt relue');
     // le réenrôlement d'un agent legacy le rattache à sa machine par le nom d'hôte
   } finally { await v1.arreter(); }
 });
 
 test('migration 1.1.0 : l\'opérateur resté au mot de passe d\'amorçage reçoit au journal un lien qui lui rend l\'accès', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-v1-'));
-  const db = new DatabaseSync(path.join(dossier, 'sentinel.db'));
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-v1-'));
+  const db = new DatabaseSync(path.join(dossier, 'nexarc.db'));
   db.exec('CREATE TABLE auth(id INTEGER PRIMARY KEY CHECK(id=1), username TEXT, pw_hash TEXT, totp_secret TEXT, pending_secret TEXT, must_change INTEGER DEFAULT 1, tfa_enabled INTEGER DEFAULT 0)');
   db.prepare('INSERT INTO auth(id, username, pw_hash) VALUES(1, ?, ?)').run('operateur', 'scrypt$00$00');
   db.close();
   const avertis = [];
   const log = { ...SILENCE, warn: m => avertis.push(String(m)) };
-  const base = { PORT: '0', HOTE: '127.0.0.1', DATA_DIR: dossier, SENTINEL_HUB_TOKEN: JETON_HUB, SOCLE_CLE: crypto.randomBytes(32).toString('base64'), SYNAPSE_URL: syn.url, SYNAPSE_JETON: JETON_SYNAPSE };
+  const base = { PORT: '0', HOTE: '127.0.0.1', DATA_DIR: dossier, NEXARC_HUB_TOKEN: JETON_HUB, SOCLE_CLE: crypto.randomBytes(32).toString('base64'), SYNAPSE_URL: syn.url, SYNAPSE_JETON: JETON_SYNAPSE };
   let x = await demarrer(base, { log });
   try {
     const lien = avertis.find(m => m.includes('#reinit='));
     assert.ok(lien, 'lien de secours écrit au journal');
     const c = new Client(x.serveur.address().port);
-    const r = await c.post('/api/compte/jeton', { usage: 'reinit', jeton: /#reinit=([\w-]+)/.exec(lien)[1], motDePasse: 'phrase de passe neuve pour sentinel' });
+    const r = await c.post('/api/compte/jeton', { usage: 'reinit', jeton: /#reinit=([\w-]+)/.exec(lien)[1], motDePasse: 'phrase de passe neuve pour nexarc' });
     assert.equal(r.status, 200);
     assert.equal(r.json.etape, 'connexion');
   } finally { await x.arreter(); }
@@ -806,8 +808,8 @@ test('migration 1.1.0 : l\'opérateur resté au mot de passe d\'amorçage reçoi
 });
 
 test('base des premières 2.0 : codes d\'inscription en clair écartés, table reprise sous sa forme hachée', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-codes-'));
-  const db = new DatabaseSync(path.join(dossier, 'sentinel.db'));
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-codes-'));
+  const db = new DatabaseSync(path.join(dossier, 'nexarc.db'));
   db.exec("CREATE TABLE enrolements(code TEXT PRIMARY KEY, expire REAL NOT NULL, site TEXT NOT NULL DEFAULT 'Agents', nom TEXT DEFAULT '', relais INTEGER NOT NULL DEFAULT 0, cree REAL NOT NULL)");
   db.prepare('INSERT INTO enrolements(code, expire, cree) VALUES(?,?,?)').run('codeenclairdunevieillebase', Date.now() / 1000 + 3600, Date.now() / 1000);
   db.close();
@@ -819,7 +821,7 @@ test('base des premières 2.0 : codes d\'inscription en clair écartés, table r
 });
 
 test('une configuration invalide arrête le démarrage', async () => {
-  await assert.rejects(() => demarrer({ ...env, DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 's-')), SENTINEL_HUB_TOKEN: 'court', PORT: 'abc' }, { log: SILENCE }), /PORT|SENTINEL_HUB_TOKEN/);
+  await assert.rejects(() => demarrer({ ...env, DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 's-')), NEXARC_HUB_TOKEN: 'court', PORT: 'abc' }, { log: SILENCE }), /PORT|NEXARC_HUB_TOKEN/);
   // Un démarrage qui aboutirait est arrêté aussitôt : l'essai échoue au lieu de laisser un serveur ouvert.
   const erreurDe = async extra => {
     let x;
@@ -830,7 +832,7 @@ test('une configuration invalide arrête le démarrage', async () => {
   const vide = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 's-')), 'socle_cle');
   fs.writeFileSync(vide, '\n');
   assert.match(await erreurDe({ SOCLE_CLE: '', SOCLE_CLE_FILE: vide }), /SOCLE_CLE_FILE/, 'secret vide : la clé n\'est jamais tirée dans le volume');
-  for (const [variable, valeur] of [['SENTINEL_MESH_LOGIN_KEY', 'abcd'], ['SENTINEL_MESH_LOGIN_KEY', '0'.repeat(63)], ['SYNAPSE_JETON', 'court'], ['SYNAPSE_JETON', 'changeme-changeme-changeme'], ['SENTINEL_CONSOLE_URL', 'http://consoles.exemple.org/chemin']]) {
+  for (const [variable, valeur] of [['NEXARC_MESH_LOGIN_KEY', 'abcd'], ['NEXARC_MESH_LOGIN_KEY', '0'.repeat(63)], ['SYNAPSE_JETON', 'court'], ['SYNAPSE_JETON', 'changeme-changeme-changeme'], ['NEXARC_CONSOLE_URL', 'http://consoles.exemple.org/chemin']]) {
     assert.match(await erreurDe({ [variable]: valeur }), new RegExp(variable), `${variable}=${valeur}`);
   }
 });
@@ -1036,9 +1038,9 @@ test('inscription : scripts Windows (Python + venv), Linux et macOS ; valeurs pi
   const anon = s.client();
   const w = await anon.get(`/api/enroll/script?os=windows&code=${info.code}&site=Prod&name=serveur-a`);
   assert.equal(w.status, 200);
-  assert.match(w.entetes['content-disposition'], /installer-sentinel\.ps1/);
+  assert.match(w.entetes['content-disposition'], /installer-nexarc\.ps1/);
   for (const attendu of [`$Code = '${info.code}'`, "$Site = 'Prod'", "$Nom = 'serveur-a'", 'function Find-Python', '*WindowsApps*', 'Python.Python.3.12',
-    '-m venv "$Dir\\venv"', 'requirements.txt?code=$Code', 'icacls $Dir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"', 'pip install -q --require-hashes --prefer-binary -r "$Dir\\requirements.txt"', 'sentinel-agent.py" --enroller', '$LASTEXITCODE -ne 0']) {
+    '-m venv "$Dir\\venv"', 'requirements.txt?code=$Code', 'icacls $Dir /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F"', 'pip install -q --require-hashes --prefer-binary -r "$Dir\\requirements.txt"', 'nexarc-agent.py" --enroller', '$LASTEXITCODE -ne 0']) {
     assert.ok(w.texte.includes(attendu), `script Windows : ${attendu}`);
   }
   for (const systeme of ['linux', 'macos']) {
@@ -1085,7 +1087,7 @@ test('inscription : installateurs à télécharger (exécutable Windows, archive
 
   const linux = await octets(anon.port, `/api/enroll/installateur?os=linux&code=${info.code}&site=Prod&name=serveur-a`);
   assert.equal(linux.status, 200);
-  assert.match(linux.entetes['content-disposition'], /filename="installer-sentinel\.sh"/);
+  assert.match(linux.entetes['content-disposition'], /filename="installer-nexarc\.sh"/);
   assert.equal(linux.corps.toString('utf8'), await script('linux'));
 
   // macOS : une archive que unzip lit, le fichier exécutable, le script intact dedans.
@@ -1094,7 +1096,7 @@ test('inscription : installateurs à télécharger (exécutable Windows, archive
   assert.equal(mac.entetes['content-type'], 'application/zip');
   fs.writeFileSync(path.join(dossier, 'mac.zip'), mac.corps);
   execFileSync('unzip', ['-q', path.join(dossier, 'mac.zip'), '-d', path.join(dossier, 'mac')]);
-  const commande = path.join(dossier, 'mac', 'Installer Sentinel.command');
+  const commande = path.join(dossier, 'mac', 'Installer NEXARC.command');
   assert.ok(fs.statSync(commande).mode & 0o111, 'le fichier .command garde son droit d’exécution');
   const texte = fs.readFileSync(commande, 'utf8');
   assert.ok(texte.includes(await script('macos')), 'le script de la commande, tel quel');
@@ -1102,21 +1104,22 @@ test('inscription : installateurs à télécharger (exécutable Windows, archive
   execFileSync('bash', ['-n', commande]);
 
   // Windows : l'exécutable de l'image, suivi de l'adresse du script, de sa longueur et de la marque.
-  const exe = path.join(import.meta.dirname, '..', 'agent', 'installateur-windows', 'installateur-sentinel.exe');
+  const exe = path.join(import.meta.dirname, '..', 'agent', 'installateur-windows', 'installateur-nexarc.exe');
   const win = await octets(anon.port, `/api/enroll/installateur?os=windows&code=${info.code}&site=Prod&name=serveur-a`);
   if (fs.existsSync(exe)) {
     const executable = fs.readFileSync(exe);
     assert.equal(win.status, 200);
-    assert.match(win.entetes['content-disposition'], /filename="installer-sentinel\.exe"/);
+    assert.match(win.entetes['content-disposition'], /filename="installer-nexarc\.exe"/);
     assert.ok(win.corps.subarray(0, executable.length).equals(executable), 'l’exécutable compilé, inchangé');
-    assert.equal(win.corps.subarray(-8).toString('latin1'), 'SNTLINS1');
+    assert.equal(win.corps.subarray(-8).toString('latin1'), 'NXRCINS1');
     const n = win.corps.readUInt32LE(win.corps.length - 12);
     const adresse = win.corps.subarray(win.corps.length - 12 - n, win.corps.length - 12).toString('utf8');
     assert.equal(executable.length + n + 12, win.corps.length);
     assert.equal(adresse, info.commands.windows.match(/irm '([^']+)'/)[1], 'la même adresse que la commande PowerShell');
     assert.match(adresse, /^[A-Za-z0-9:/._~?&=%+\-\[\]]+$/, 'rien que l’exécutable refuserait');
   } else {
-    assert.equal(win.status, 503, 'sans exécutable compilé, un refus qui renvoie à la commande');
+    assert.equal(win.status, 404, 'sans exécutable compilé, un refus qui renvoie à la commande');
+    assert.match(win.corps.toString('utf8'), /commande PowerShell/);
   }
   // Mêmes contrôles que le script : code inconnu sans session refusé, système inconnu introuvable.
   assert.equal((await octets(anon.port, '/api/enroll/installateur?os=linux&code=AAAAAAAAAAAAAAAAAAAAAA')).status, 401);
@@ -1126,7 +1129,7 @@ test('inscription : installateurs à télécharger (exécutable Windows, archive
 });
 
 test('rotation de SOCLE_CLE : secrets d\'appareils rescellés, jetons d\'agents intacts ; secret resté sous l\'ancienne clé : arrêt tant qu\'elle manque', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-rot-'));
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-rot-'));
   const cle = () => crypto.randomBytes(32).toString('base64');
   const k1 = cle(), k2 = cle();
   const carte = await fauxRedfish();
@@ -1208,7 +1211,7 @@ test('pont VNC de bout en bout : mise à niveau WebSocket sous session, mot de p
 
 test('thème : la page porte la gamme posée par la page Thème du Hub ; SOMA hors Hub', async () => {
   assert.match((await s.client().get('/')).texte, /<html lang="fr" data-gamme="soma">/);
-  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-gamme-')), { SOCLE_THEME: 'console' });
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-gamme-')), { SOCLE_THEME: 'console' });
   try { assert.match((await x.client().get('/')).texte, /data-gamme="console"/); } finally { await x.arreter(); }
   const lire = f => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
   assert.match(lire('deploy/compose.hub.yml'), /^ {6}SOCLE_THEME: "\{\{hub\.theme\}\}"$/m);
@@ -1222,8 +1225,8 @@ test('comptes depuis le Hub : manifeste et Compose relient le jeton d’administ
   assert.equal(manifeste.accounts.invitation, true);
   assert.equal(manifeste.config.find(c => c.key === 'HUB_ADMIN_TOKEN').type, 'secret');
   assert.match(lire('deploy/compose.hub.yml'), /^ {6}SOCLE_JETON_ADMIN_HUB: "\{\{config\.HUB_ADMIN_TOKEN\}\}"$/m);
-  const jeton = 'jeton-admin-hub-sentinel-' + 'b'.repeat(32);
-  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-hub-')), { SOCLE_JETON_ADMIN_HUB: jeton });
+  const jeton = 'jeton-admin-hub-nexarc-' + 'b'.repeat(32);
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'nexarc-hub-')), { SOCLE_JETON_ADMIN_HUB: jeton });
   try {
     const c = x.client();
     const porteur = j => ({ entetes: { authorization: `Bearer ${j}` }, sansCsrf: true, origine: null });

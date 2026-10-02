@@ -1,4 +1,4 @@
-// Base de Sentinel : parc (machines avec ou sans agent), tâches distantes,
+// Base de NEXARC : parc (machines avec ou sans agent), tâches distantes,
 // automatisations, alertes, flux d'activité, codes et jetons d'enrôlement.
 //
 // Deux règles de conception valent partout :
@@ -22,9 +22,17 @@ const secondes = () => Date.now() / 1000;
 
 export function ouvrirBase(dossier) {
   fs.mkdirSync(dossier, { recursive: true, mode: 0o700 });
-  const fichier = path.join(dossier, 'sentinel.db');
+  const fichier = path.join(dossier, 'nexarc.db');
+  // NEXARC s'appelait Sentinel : sa base (1.1.0 ou premières 2.0) porte encore
+  // l'ancien nom. Elle est renommée une fois, journaux WAL compris, avant
+  // l'ouverture ; la reprise de la 1.1.0 suit comme avant.
+  const ancienne = path.join(dossier, 'sentinel.db');
+  if (!fs.existsSync(fichier) && fs.existsSync(ancienne)) {
+    for (const suffixe of ['-wal', '-shm']) if (fs.existsSync(ancienne + suffixe)) fs.renameSync(ancienne + suffixe, fichier + suffixe);
+    fs.renameSync(ancienne, fichier);
+  }
   // La base garde des secrets scellés et des empreintes de jetons : lisible par
-  // Sentinel seul. SQLite donne aux journaux WAL les droits de la base.
+  // NEXARC seul. SQLite donne aux journaux WAL les droits de la base.
   fs.closeSync(fs.openSync(fichier, 'a', 0o600));
   for (const f of [fichier, fichier + '-wal', fichier + '-shm']) if (fs.existsSync(f)) fs.chmodSync(f, 0o600);
   const db = new DatabaseSync(fichier);
@@ -300,7 +308,7 @@ export class Parc {
     this.db.prepare('DELETE FROM machines WHERE id = ?').run(machineId);
   }
 
-  // Rotation de SOCLE_CLE : le socle rescelle les secrets TOTP, Sentinel les
+  // Rotation de SOCLE_CLE : le socle rescelle les secrets TOTP, NEXARC les
   // siens (mots de passe VNC, identifiants Redfish), au même démarrage. Un secret
   // qui s'ouvre sous la clé actuelle est laissé tel quel ; sous l'ancienne, il
   // est rescellé. Illisible sous l'une comme l'autre :

@@ -1,4 +1,4 @@
-# Sentinel
+# NEXARC
 
 Le parc sous les yeux : des agents d'inventaire, des tâches distantes, le suivi
 des correctifs, des consoles intégrées et le réveil des machines — auto-hébergé,
@@ -6,7 +6,7 @@ sur le socle commun des services.
 
 Projet [CodexX64](https://github.com/CodexX64). Licence MIT.
 
-## Ce que fait Sentinel
+## Ce que fait NEXARC
 
 - **Parc** : chaque machine remonte, par son agent, son système, ses métriques
   (CPU, RAM, disque), sa posture (antivirus, pare-feu, chiffrement, correctifs),
@@ -41,13 +41,13 @@ Projet [CodexX64](https://github.com/CodexX64). Licence MIT.
 
 ## Comptes et sécurité
 
-Sentinel repose sur le socle commun : comptes nominatifs, rôles (`admin`,
+NEXARC repose sur le socle commun : comptes nominatifs, rôles (`admin`,
 `membre`, `lecture`), et au moins deux facteurs pour se connecter.
 
 - **Clé d'accès** (Touch ID, Face ID, Windows Hello, clé USB) — exigée pour un
-  administrateur quand Sentinel est servi en HTTPS.
+  administrateur quand NEXARC est servi en HTTPS.
 - **Application d'authentification** (TOTP), configurée par un QR code généré
-  localement dans le navigateur : le secret ne quitte jamais Sentinel.
+  localement dans le navigateur : le secret ne quitte jamais NEXARC.
 - **Mot de passe** (Argon2id), selon la politique choisie.
 - **Dix codes de secours** à usage unique.
 
@@ -78,7 +78,7 @@ essais : elle n'est atteignable que par un administrateur sous confirmation
 récente ; elle n'envoie aucune donnée applicative et ferme la connexion dès la
 poignée TLS finie ; elle ne rend que l'empreinte et le sujet du certificat.
 
-**Adresses joignables.** Les consoles et cartes jointes par Sentinel ne
+**Adresses joignables.** Les consoles et cartes jointes par NEXARC ne
 peuvent viser ni les métadonnées d'un nuage, ni un lien local, ni une plage
 réservée : contrôlé à la saisie pour une adresse littérale, et à chaque
 connexion pour un nom d'hôte (la résolution DNS est vérifiée).
@@ -94,11 +94,11 @@ plus d'une heure avant de réessayer.
 
 Les clés d'accès n'existent que sur une page HTTPS. Sans HTTPS, `SOCLE_HTTP=1`
 ouvre un mode dégradé, affiché comme tel partout : réservé à un réseau de
-confiance, le temps de servir Sentinel en HTTPS.
+confiance, le temps de servir NEXARC en HTTPS.
 
-**Tourner la clé maîtresse.** Dans le Hub (réglages avancés de Sentinel) ou dans
+**Tourner la clé maîtresse.** Dans le Hub (réglages avancés de NEXARC) ou dans
 `.env` : la clé actuelle dans `SOCLE_CLE_ANCIENNE`, une neuve
-(`openssl rand -base64 32`) dans `SOCLE_CLE`, puis redémarrer. Sentinel rescelle
+(`openssl rand -base64 32`) dans `SOCLE_CLE`, puis redémarrer. NEXARC rescelle
 chaque secret TOTP et chaque secret d'appareil (mots de passe VNC, identifiants
 Redfish), chacun en une transaction, et l'écrit dans ses journaux. Vider ensuite
 `SOCLE_CLE_ANCIENNE` et redémarrer. Une clé que la base ne connaît pas arrête le
@@ -110,11 +110,11 @@ rejoue toute la rotation sur une instance lancée comme en production.
 
 ## Installation par le Hub
 
-Dans le Hub : Extensions → Sentinel → Installer. Le Hub génère la clé maîtresse
+Dans le Hub : Extensions → NEXARC → Installer. Le Hub génère la clé maîtresse
 et le jeton de service, les garde dans son coffre, et branche, si elle est
 installée, la mémoire SYNAPSE.
 
-Au premier démarrage, Sentinel écrit son **jeton d'installation** dans ses
+Au premier démarrage, NEXARC écrit son **jeton d'installation** dans ses
 journaux (bouton Journaux du service). Il ne sert qu'une fois : à créer le
 premier compte administrateur.
 
@@ -128,11 +128,11 @@ secrets d'appareils.
 
 ```bash
 cp .env.example .env
-# renseigner SENTINEL_HUB_TOKEN (openssl rand -hex 24)
+# renseigner NEXARC_HUB_TOKEN (openssl rand -hex 24)
 mkdir -p secrets && openssl rand -base64 32 > secrets/socle_cle && : > secrets/socle_cle_ancienne
 sudo chown 10001:10001 secrets/socle_cle secrets/socle_cle_ancienne && sudo chmod 400 secrets/socle_cle secrets/socle_cle_ancienne
 docker compose up -d --build
-docker compose logs sentinel | grep "Jeton d'installation"
+docker compose logs nexarc | grep "Jeton d'installation"
 ```
 
 Ouvrir ensuite `http://<hôte>:8090`, coller le jeton, créer le compte et son
@@ -157,28 +157,31 @@ sauvegarde restaurée), `node outils/parcours-navigateur.mjs <url> <jeton> [doss
 
 Une sauvegarde est un instantané cohérent de la base, chiffré pour une clé
 publique RSA (3072 bits au moins) dont la clé privée ne vit **pas** sur la
-machine de Sentinel : qui prend la machine ne relit pas les sauvegardes.
+machine de NEXARC : qui prend la machine ne relit pas les sauvegardes.
 
 ```bash
 # Une fois, sur le poste qui gardera la clé privée :
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out sentinel-sauvegarde.pem
-openssl pkey -in sentinel-sauvegarde.pem -pubout -out sentinel-sauvegarde.pub
-# Chaque jour, sur l'hôte de Sentinel (la clé publique suffit) :
-docker exec -i <sentinel> node src/cli.js sauvegarde < sentinel-sauvegarde.pub > sentinel-$(date -u +%F).sauv
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out nexarc-sauvegarde.pem
+openssl pkey -in nexarc-sauvegarde.pem -pubout -out nexarc-sauvegarde.pub
+# Chaque jour, sur l'hôte de NEXARC (la clé publique suffit) :
+docker exec -i <nexarc> node src/cli.js sauvegarde < nexarc-sauvegarde.pub > nexarc-$(date -u +%F).sauv
 # Restauration, sur le poste de la clé privée, dans un fichier neuf :
-node src/cli.js restaurer sentinel-sauvegarde.pem sentinel.db < sentinel-AAAA-MM-JJ.sauv
+node src/cli.js restaurer nexarc-sauvegarde.pem nexarc.db < nexarc-AAAA-MM-JJ.sauv
 ```
 
 Copier chaque sauvegarde hors de l'hôte et la garder trente jours. La base
 restaurée garde ses secrets scellés sous `SOCLE_CLE` : sans une copie hors
 ligne de cette clé, elle ne rouvre ni les secrets TOTP ni les secrets
 d'appareils. Chaque sauvegarde est inscrite au journal de sécurité. Remettre la
-base dans le volume, Sentinel arrêté : `sentinel.db` au propriétaire 10001, en
+base dans le volume, NEXARC arrêté : `nexarc.db` au propriétaire 10001, en
 `0600`, sans les fichiers `-wal` et `-shm` d'avant.
 
-## Mise à jour depuis la version 1.1.0
+## Reprise de Sentinel (1.1.0 ou 2.0)
 
-Sentinel 2.0 reprend une base `sentinel.db` de la 1.1.0 au premier démarrage,
+NEXARC s'appelait Sentinel. Sa base (`sentinel.db`) est renommée `nexarc.db` au premier
+démarrage, puis reprise comme ci-dessous.
+
+NEXARC 2.0 reprend une base de la 1.1.0 au premier démarrage,
 puis retire les tables de l'ancienne version.
 
 - **Le compte.** La 1.x avait un opérateur unique ; il devient l'administrateur
@@ -207,7 +210,7 @@ Le conteneur ne tourne plus en `root`. Un volume créé par la version 1 doit
 donc changer de propriétaire une fois, avant le premier démarrage de la 2 :
 
 ```bash
-docker run --rm -v <volume>:/data busybox cp /data/sentinel.db /data/sentinel.db.v1
+docker run --rm -v <volume>:/data busybox cp /data/nexarc.db /data/nexarc.db.v1
 docker run --rm -v <volume>:/data busybox chown -R 10001:10001 /data
 ```
 
@@ -224,13 +227,13 @@ la **commande d'une ligne** ; les deux lancent le même script, avec le même co
 
 | Système | Installateur | Commande |
 |---|---|---|
-| Windows (tâche planifiée SYSTEM) | `installer-sentinel.exe` : double-clic, accord d'un administrateur | PowerShell en administrateur : `powershell -ExecutionPolicy Bypass -Command "…; irm '<adresse>' \| iex"` |
-| macOS (launchd) | `installer-sentinel-macos.zip` : « Installer Sentinel.command », clic droit puis « Ouvrir » | Terminal : `curl -fsSL '<adresse>' \| sudo bash` |
-| Linux (systemd) | `installer-sentinel.sh` : `sudo bash installer-sentinel.sh` | `curl -fsSL '<adresse>' \| sudo bash` |
+| Windows (tâche planifiée SYSTEM) | `installer-nexarc.exe` : double-clic, accord d'un administrateur | PowerShell en administrateur : `powershell -ExecutionPolicy Bypass -Command "…; irm '<adresse>' \| iex"` |
+| macOS (launchd) | `installer-nexarc-macos.zip` : « Installer NEXARC.command », clic droit puis « Ouvrir » | Terminal : `curl -fsSL '<adresse>' \| sudo bash` |
+| Linux (systemd) | `installer-nexarc.sh` : `sudo bash installer-nexarc.sh` | `curl -fsSL '<adresse>' \| sudo bash` |
 
 L'exécutable Windows est compilé à la construction de l'image, depuis sa source
 (`agent/installateur-windows`, MinGW-w64, lié statiquement, sortie
-déterministe). Sentinel lui ajoute en fin de fichier l'adresse du script ;
+déterministe). NEXARC lui ajoute en fin de fichier l'adresse du script ;
 l'exécutable la revérifie caractère par caractère, demande l'élévation par son
 manifeste, puis lance le PowerShell du système par son chemin complet. Il
 n'est pas signé : SmartScreen avertit (« Informations complémentaires », puis
@@ -238,14 +241,14 @@ n'est pas signé : SmartScreen avertit (« Informations complémentaires », pui
 `.command` ; non signé lui aussi, il s'ouvre par clic droit puis « Ouvrir ».
 
 Le script Windows cherche Python 3 (en écartant le raccourci du Microsoft
-Store), l'installe par winget s'il manque, ferme `%ProgramData%\SentinelAgent`
+Store), l'installe par winget s'il manque, ferme `%ProgramData%\NexarcAgent`
 à SYSTEM et aux administrateurs (le jeton y est rangé ; ProgramData, lui, est
-lisible par tous les utilisateurs), crée `%ProgramData%\SentinelAgent\venv`, y
+lisible par tous les utilisateurs), crée `%ProgramData%\NexarcAgent\venv`, y
 installe `psutil` et `requests`, puis enrôle l'agent. Sur macOS, Python 3 vient
 des outils en ligne de commande (`xcode-select --install`).
 
-Les postes joignent Sentinel à l'adresse de « Adresse publique de Sentinel »
-(`SENTINEL_PUBLIC_URL`) : sans elle, à celle de la page ouverte, qui ne vaut
+Les postes joignent NEXARC à l'adresse de « Adresse publique de NEXARC »
+(`NEXARC_PUBLIC_URL`) : sans elle, à celle de la page ouverte, qui ne vaut
 rien pour un autre poste quand c'est `localhost` (la fenêtre le signale).
 Un code sert à un seul poste et expire au bout d'une heure.
 
@@ -257,10 +260,10 @@ vérifié par son empreinte SHA-256 avant d'être installé (`pip install
 Le site et le nom saisis sont contrôlés (lettres, chiffres, espace, point,
 tiret, parenthèses) avant d'entrer dans un script exécuté en root ou SYSTEM.
 
-L'agent (`agent/sentinel-agent.py`, Python 3, `psutil` et `requests`) :
+L'agent (`agent/nexarc-agent.py`, Python 3, `psutil` et `requests`) :
 
-- vérifie **toujours** le certificat de Sentinel — autorité système ou fichier
-  `SENTINEL_CA`, ou empreinte SHA-256 épinglée (`SENTINEL_PIN`) pour un
+- vérifie **toujours** le certificat de NEXARC — autorité système ou fichier
+  `NEXARC_CA`, ou empreinte SHA-256 épinglée (`NEXARC_PIN`) pour un
   certificat auto-signé ; la vérification par autorité ne cède la place qu'à
   une empreinte bien formée ;
 - **constate** la posture qu'il remonte : antivirus (centre de sécurité Windows
@@ -276,8 +279,8 @@ L'agent (`agent/sentinel-agent.py`, Python 3, `psutil` et `requests`) :
 Révoquer un jeton — poste perdu, jeton exposé, incident :
 
 ```bash
-docker exec <sentinel> node src/cli.js agents lister
-docker exec <sentinel> node src/cli.js agents revoquer <hôte>    # ou --tous
+docker exec <nexarc> node src/cli.js agents lister
+docker exec <nexarc> node src/cli.js agents revoquer <hôte>    # ou --tous
 ```
 
 Le jeton cesse aussitôt ; les tâches encore dues de ce poste sont abandonnées ;
@@ -288,24 +291,24 @@ inscrite au journal de sécurité.
 ## Consoles et cartes de gestion
 
 Jusqu'à huit accès par machine, déclarés par un administrateur sous
-confirmation récente (un accès dit où Sentinel se connecte sur le réseau
+confirmation récente (un accès dit où NEXARC se connecte sur le réseau
 interne), chaque déclaration inscrite au journal de sécurité. Types : console VNC intégrée (hôte:port, écran
-plein dans Sentinel, mot de passe scellé côté serveur), iDRAC, iLO, IPMI/BMC,
+plein dans NEXARC, mot de passe scellé côté serveur), iDRAC, iLO, IPMI/BMC,
 JetKVM, hyperviseur (console noVNC des VM), interface web, MeshCentral. Une URL
 amont est jointe par un proxy inverse qui n'accepte que http(s), refuse les
 métadonnées de nuage et les plages réservées, et filtre en-têtes et cookies.
 
 L'interface web d'une carte est du code qui n'est pas le nôtre : elle ne
-s'exécute jamais sous l'origine de Sentinel, où elle lirait l'API avec la
-session de l'opérateur. Pour l'afficher dans Sentinel, poser
-`SENTINEL_CONSOLE_URL` : un second écouteur (`SENTINEL_CONSOLE_PORT`, 8091 par
+s'exécute jamais sous l'origine de NEXARC, où elle lirait l'API avec la
+session de l'opérateur. Pour l'afficher dans NEXARC, poser
+`NEXARC_CONSOLE_URL` : un second écouteur (`NEXARC_CONSOLE_PORT`, 8091 par
 défaut) sert alors les consoles sous cette adresse, où ne vivent ni page, ni
-API, ni session de Sentinel. Chaque ouverture tire une passe de 256 bits, liée
+API, ni session de NEXARC. Chaque ouverture tire une passe de 256 bits, liée
 à la session qui l'a demandée, à la machine et à l'accès, qui meurt avec cette
-session (huit heures au plus) ; seule la page de Sentinel qui l'a tirée peut
+session (huit heures au plus) ; seule la page de NEXARC qui l'a tirée peut
 encadrer la console. Donner à cette adresse **son propre nom d'hôte**, en HTTPS
 de préférence : un autre port du même hôte sépare les scripts, pas les cookies,
-que les navigateurs ne distinguent pas par port. Sans `SENTINEL_CONSOLE_URL`,
+que les navigateurs ne distinguent pas par port. Sans `NEXARC_CONSOLE_URL`,
 l'interface d'une carte s'ouvre dans un nouvel onglet, directement sur la carte.
 L'alimentation passe par Redfish sur les cartes qui le supportent (identifiants
 posés par un administrateur dans « Accès distants »). Redfish s'authentifie en
@@ -321,13 +324,13 @@ Chaque remontée d'agent, et chaque tour de collecte, évalue ces règles :
 
 | Règle | Ouverte quand | Gravité |
 |---|---|---|
-| Hors ligne | aucune remontée depuis `SENTINEL_ALERT_OFFLINE_MINUTES` | critique |
+| Hors ligne | aucune remontée depuis `NEXARC_ALERT_OFFLINE_MINUTES` | critique |
 | Antivirus | absent ou inactif | critique |
 | Pare-feu | inactif | élevée |
 | Chiffrement | disque système non chiffré | élevée |
-| Correctifs de sécurité | en attente depuis plus de `SENTINEL_ALERT_PATCH_DAYS` jours | élevée |
-| Disque | rempli à `SENTINEL_ALERT_DISK_PERCENT` % ou plus | élevée |
-| Score de risque | à `SENTINEL_ALERT_RISK` ou plus | élevée |
+| Correctifs de sécurité | en attente depuis plus de `NEXARC_ALERT_PATCH_DAYS` jours | élevée |
+| Disque | rempli à `NEXARC_ALERT_DISK_PERCENT` % ou plus | élevée |
+| Score de risque | à `NEXARC_ALERT_RISK` ou plus | élevée |
 
 Une alerte par machine et par règle, jamais deux : tant que la condition dure,
 l'alerte ouverte suit la mesure. Quand la condition disparaît, elle se résout
@@ -342,44 +345,44 @@ correctifs de sécurité en attente (5 chacun, 25 au plus), sur une base de 10.
 
 ## Réveil réseau
 
-Sentinel réveille une machine hors ligne en confiant un paquet magique à un
+NEXARC réveille une machine hors ligne en confiant un paquet magique à un
 agent relais **en ligne du même sous-réseau** (diffusion dirigée calculée et
-validée). Si le conteneur est sur le réseau de l'hôte (`SENTINEL_HOST_NET=1`),
+validée). Si le conteneur est sur le réseau de l'hôte (`NEXARC_HOST_NET=1`),
 le serveur émet lui-même. Sans relais disponible ni réseau de l'hôte, l'action
 est refusée (409) plutôt que d'échouer en silence.
 
 ## Configuration
 
 Chaque variable secrète peut aussi être lue d'un fichier : `NOM_FILE=/chemin`
-(convention des secrets Docker). Une valeur invalide arrête Sentinel au
+(convention des secrets Docker). Une valeur invalide arrête NEXARC au
 démarrage avec la liste des erreurs. Les variables `SOCLE_*` sont lues par le
 socle.
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `SENTINEL_HUB_TOKEN` | jeton du Hub : état, tâches, réveils — jamais les comptes ni les réglages | — |
+| `NEXARC_HUB_TOKEN` | jeton du Hub : état, tâches, réveils — jamais les comptes ni les réglages | — |
 | `SOCLE_JETON_ADMIN_HUB` | jeton d'administration des comptes par le Hub (Comptes des services) ; dans le Hub, généré (`HUB_ADMIN_TOKEN`) | — |
 | `SOCLE_THEME` | gamme de l'interface : `soma` ou `console` (noir et vert, ou blanc et bleu) ; dans le Hub, choisie dans la page Thème | `soma` |
-| `SENTINEL_ALLOW_EXEC` | `1` autorise la commande libre, en tâche comme en automatisation (toujours admin + confirmation récente) ; à `0`, une automatisation « commande libre » existante ne s'exécute plus | `0` |
-| `SENTINEL_MAX_MACHINES` | plafond de machines | `5000` |
-| `SENTINEL_INGEST_MINUTE` | remontées d'agent par minute et par IP | `240` |
-| `SENTINEL_COLLECT_INTERVAL` | cadence de la boucle de collecte (s) | `30` |
-| `SENTINEL_OFFLINE_AFTER` | silence toléré avant « hors ligne » (s) | `120` |
-| `SENTINEL_JOB_TIMEOUT` | délai d'exécution d'une tâche par l'agent (s) | `120` |
-| `SENTINEL_ALERT_OFFLINE_MINUTES` | alerte : minutes sans remontée | `15` |
-| `SENTINEL_ALERT_PATCH_DAYS` | alerte : jours d'attente d'un correctif de sécurité | `7` |
-| `SENTINEL_ALERT_DISK_PERCENT` | alerte : disque rempli à (%) | `90` |
-| `SENTINEL_ALERT_RISK` | alerte : score de risque à partir de | `70` |
-| `SENTINEL_HOST_NET` | `1` : conteneur sur le réseau de l'hôte (réveil direct) | `0` |
-| `SENTINEL_PUBLIC_URL` | adresse annoncée aux agents ; vide : celle de l'enrôlement | — |
-| `SENTINEL_MESH_URL` | serveur MeshCentral ; vide : prise en main désactivée | — |
-| `SENTINEL_MESH_USER` | compte de service Mesh (sans `user//`), pour l'auto-login | — |
-| `SENTINEL_MESH_LOGIN_KEY` | clé hex de `meshcentral --logintokenkey` | — |
-| `SENTINEL_MESH_VIEWMODE` / `_HIDE` / `_EMBED` | affichage du bureau Mesh | `11` / — / `0` |
+| `NEXARC_ALLOW_EXEC` | `1` autorise la commande libre, en tâche comme en automatisation (toujours admin + confirmation récente) ; à `0`, une automatisation « commande libre » existante ne s'exécute plus | `0` |
+| `NEXARC_MAX_MACHINES` | plafond de machines | `5000` |
+| `NEXARC_INGEST_MINUTE` | remontées d'agent par minute et par IP | `240` |
+| `NEXARC_COLLECT_INTERVAL` | cadence de la boucle de collecte (s) | `30` |
+| `NEXARC_OFFLINE_AFTER` | silence toléré avant « hors ligne » (s) | `120` |
+| `NEXARC_JOB_TIMEOUT` | délai d'exécution d'une tâche par l'agent (s) | `120` |
+| `NEXARC_ALERT_OFFLINE_MINUTES` | alerte : minutes sans remontée | `15` |
+| `NEXARC_ALERT_PATCH_DAYS` | alerte : jours d'attente d'un correctif de sécurité | `7` |
+| `NEXARC_ALERT_DISK_PERCENT` | alerte : disque rempli à (%) | `90` |
+| `NEXARC_ALERT_RISK` | alerte : score de risque à partir de | `70` |
+| `NEXARC_HOST_NET` | `1` : conteneur sur le réseau de l'hôte (réveil direct) | `0` |
+| `NEXARC_PUBLIC_URL` | adresse annoncée aux agents ; vide : celle de l'enrôlement | — |
+| `NEXARC_MESH_URL` | serveur MeshCentral ; vide : prise en main désactivée | — |
+| `NEXARC_MESH_USER` | compte de service Mesh (sans `user//`), pour l'auto-login | — |
+| `NEXARC_MESH_LOGIN_KEY` | clé hex de `meshcentral --logintokenkey` | — |
+| `NEXARC_MESH_VIEWMODE` / `_HIDE` / `_EMBED` | affichage du bureau Mesh | `11` / — / `0` |
 | `SYNAPSE_URL` / `SYNAPSE_JETON` | mémoire du parc ; jamais le contenu d'une commande | — |
-| `SENTINEL_CONSOLE_URL` | origine des consoles web intégrées (schéma, hôte, port), sur son propre nom d'hôte ; vide : une carte s'ouvre dans un nouvel onglet | — |
-| `SENTINEL_CONSOLE_PORT` | écoute de cette origine | `8091` |
-| `DATA_DIR` | dossier de `sentinel.db` | `/app/data` |
+| `NEXARC_CONSOLE_URL` | origine des consoles web intégrées (schéma, hôte, port), sur son propre nom d'hôte ; vide : une carte s'ouvre dans un nouvel onglet | — |
+| `NEXARC_CONSOLE_PORT` | écoute de cette origine | `8091` |
+| `DATA_DIR` | dossier de `nexarc.db` | `/app/data` |
 | `PORT` / `HOTE` | écoute | `8090` / `0.0.0.0` |
 | `SOCLE_CLE` | clé maîtresse, 32 octets en base64 (en conteneur : `SOCLE_CLE_FILE`, secret Docker) ; sans l'une ni l'autre : créée dans `DATA_DIR/cles` (développement) | — |
 | `SOCLE_CLE_ANCIENNE` | pendant une rotation seulement : la clé remplacée | — |
@@ -397,7 +400,7 @@ Argon2id, durée de session, poivre HMAC) ; leurs valeurs par défaut conviennen
 
 ## Derrière un relais inverse
 
-Déclarer l'adresse du relais dans `SOCLE_PROXYS` ; sans cela, Sentinel ignore
+Déclarer l'adresse du relais dans `SOCLE_PROXYS` ; sans cela, NEXARC ignore
 `X-Forwarded-For` et `X-Forwarded-Proto`, et compte les tentatives par l'adresse
 du relais. Le relais doit transmettre :
 
@@ -405,10 +408,10 @@ du relais. Le relais doit transmettre :
 X-Forwarded-For, X-Forwarded-Proto, Host
 ```
 
-Les consoles intégrées ouvrent des WebSockets (`/vnc/…` sur Sentinel, `/c/…`
+Les consoles intégrées ouvrent des WebSockets (`/vnc/…` sur NEXARC, `/c/…`
 sur l'origine des consoles) : le relais doit laisser passer la mise à niveau
 `Upgrade`. L'origine des consoles est une seconde route du relais, vers le port
-`SENTINEL_CONSOLE_PORT`, sous son propre nom d'hôte.
+`NEXARC_CONSOLE_PORT`, sous son propre nom d'hôte.
 
 ## Sécurité
 
@@ -416,7 +419,7 @@ Les données conservées et leur finalité sont décrites dans
 `web/confidentialite.txt`, servi à `/confidentialite.txt`.
 
 En cas d'incident : fermer toutes les sessions et forcer une réinitialisation
-depuis la page Comptes, couper la commande libre (`SENTINEL_ALLOW_EXEC=0`) et
+depuis la page Comptes, couper la commande libre (`NEXARC_ALLOW_EXEC=0`) et
 régénérer le jeton du Hub au redéploiement, révoquer les jetons d'agents
 (`node src/cli.js agents revoquer --tous`), tourner la clé maîtresse, restaurer
 depuis une sauvegarde. `node outils/exercice-incident.mjs` joue ce déroulé de

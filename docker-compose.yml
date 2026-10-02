@@ -1,11 +1,11 @@
-# Sentinel seul, sans le Hub : docker compose up -d --build
+# NEXARC seul, sans le Hub : docker compose up -d --build
 # Les réglages viennent de .env (voir .env.example), la clé maîtresse d'un
 # secret Docker (README, « Installation seule »).
 services:
-  sentinel:
+  nexarc:
     build: .
-    image: sentinel-rmm:local
-    container_name: sentinel
+    image: nexarc:local
+    container_name: nexarc
     restart: unless-stopped
     env_file: .env
     # La clé maîtresse vient d'un fichier hors du volume de données : une copie
@@ -15,11 +15,11 @@ services:
       SOCLE_CLE_ANCIENNE_FILE: /run/secrets/socle_cle_ancienne
     secrets: [socle_cle, socle_cle_ancienne]
     ports:
-      - "${SENTINEL_PORT:-8090}:8090"
-      # Origine des consoles web (SENTINEL_CONSOLE_URL) : rien n'y écoute sans elle.
-      - "${SENTINEL_CONSOLE_PORT:-8091}:${SENTINEL_CONSOLE_PORT:-8091}"
+      - "${NEXARC_PORT:-8090}:8090"
+      # Origine des consoles web (NEXARC_CONSOLE_URL) : rien n'y écoute sans elle.
+      - "${NEXARC_CONSOLE_PORT:-8091}:${NEXARC_CONSOLE_PORT:-8091}"
     volumes:
-      - sentinel-data:/data
+      - nexarc-data:/data
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -42,5 +42,5 @@ secrets:
     file: ./secrets/socle_cle_ancienne
 
 volumes:
-  sentinel-data:
-    name: sentinel-data
+  nexarc-data:
+    name: nexarc-data

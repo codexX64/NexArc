@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Agent de supervision Sentinel.
+"""Agent de supervision NEXARC.
 
 Posé sur un poste, il remonte son état (CPU/RAM/disque, posture, inventaire,
 logiciels, mises à jour) et relève ses tâches. Durci par rapport à la 1.x :
 
-  - TLS TOUJOURS vérifié : autorité (système, ou fichier SENTINEL_CA), ou
-    empreinte SHA-256 épinglée (SENTINEL_PIN). La vérification par autorité ne
+  - TLS TOUJOURS vérifié : autorité (système, ou fichier NEXARC_CA), ou
+    empreinte SHA-256 épinglée (NEXARC_PIN). La vérification par autorité ne
     cède la place qu'à une empreinte bien formée, jamais à rien.
   - La posture remontée est constatée, jamais supposée : antivirus, pare-feu et
     chiffrement sont lus sur le poste ; ce qui ne peut pas l'être part
@@ -56,8 +56,8 @@ ATTENTE_JETON_REFUSE = 65 * 60
 FP_SHA256 = re.compile(r'^[0-9a-f]{64}$')
 # Sorties des outils de posture en anglais : elles sont analysées, pas affichées.
 ENV_C = dict(os.environ, LC_ALL='C', LANG='C')
-CONFIG_DIR = (os.path.join(os.environ.get('ProgramData', r'C:\ProgramData'), 'SentinelAgent') if IS_WIN
-              else '/usr/local/sentinel-agent' if IS_MAC else '/opt/sentinel-agent')
+CONFIG_DIR = (os.path.join(os.environ.get('ProgramData', r'C:\ProgramData'), 'NexarcAgent') if IS_WIN
+              else '/usr/local/nexarc-agent' if IS_MAC else '/opt/nexarc-agent')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'agent.json')
 
 
@@ -88,7 +88,7 @@ class EpingleAdapter(HTTPAdapter):
 class SessionAgent(requests.Session):
     """requests laisse REQUESTS_CA_BUNDLE / CURL_CA_BUNDLE, s'ils existent dans
     l'environnement, remplacer session.verify à chaque requête : une empreinte
-    épinglée ou un SENTINEL_CA seraient alors ignorés sans bruit. Ici le choix
+    épinglée ou un NEXARC_CA seraient alors ignorés sans bruit. Ici le choix
     configuré l'emporte ; seul le chemin « autorités du système » accepte le
     lot désigné par l'environnement (c'est encore une vérification par autorité)."""
 
@@ -105,7 +105,7 @@ def session_http(url, pin=None, ca=None):
         comparaison de l'empreinte (urllib3 n'accepte assert_fingerprint
         qu'avec verify=False) — ce n'est pas une vérification en moins, c'est
         une vérification plus stricte : un seul certificat passe ;
-      - sinon : vérification par autorité, toujours — le fichier SENTINEL_CA
+      - sinon : vérification par autorité, toujours — le fichier NEXARC_CA
         s'il est donné, les autorités du système autrement."""
     s = SessionAgent()
     if pin:
@@ -448,7 +448,7 @@ def collect_software():
                         if p and p[0]:
                             apps.append({'name': p[0], 'version': p[1] if len(p) > 1 else '', 'publisher': '', 'source': 'rpm'})
     except Exception as e:  # noqa: BLE001 — un registre ou un gestionnaire en panne ne doit pas taire le reste
-        print('[sentinel-agent] inventaire logiciel partiel :', e)
+        print('[nexarc-agent] inventaire logiciel partiel :', e)
     apps.sort(key=lambda a: a['name'].lower())
     return apps[:3000]
 
@@ -488,7 +488,7 @@ def collect_updates():
                         secu = 'security' in line.lower()
                         ups.append({'name': nom, 'current': '', 'available': (p[2].strip('()') if len(p) > 2 else ''), 'security': secu, 'kind': 'Système'})
     except Exception as e:  # noqa: BLE001 — une source en panne ne doit pas taire les autres
-        print('[sentinel-agent] mises à jour partielles :', e)
+        print('[nexarc-agent] mises à jour partielles :', e)
     _MAJ_EN_ATTENTE[0] = len(ups)
     return ups[:600]
 
@@ -578,19 +578,19 @@ def poll_jobs(sess, base, headers, timeout):
     except (requests.RequestException, ValueError):
         return False
     for job in lot.get('jobs', []):
-        print('[sentinel-agent] tâche %s %s' % (job.get('id'), job.get('kind')))
+        print('[nexarc-agent] tâche %s %s' % (job.get('id'), job.get('kind')))
         rc, out = run_job(job, job_timeout)
         if job.get('kind') in ('install', 'uninstall', 'inventory', 'update'):
             inventaire_a_refaire = True
         try:
             sess.post('%s/api/agent/jobs/%s/result' % (base, job['id']), json={'output': out[-SORTIE_MAX:], 'rc': rc}, headers=headers, timeout=15)
         except requests.RequestException as e:
-            print('[sentinel-agent] résultat non transmis :', e)
+            print('[nexarc-agent] résultat non transmis :', e)
     return inventaire_a_refaire
 
 
 def lire_config():
-    for source in (CONFIG_FILE, os.environ.get('SENTINEL_CONFIG', '')):
+    for source in (CONFIG_FILE, os.environ.get('NEXARC_CONFIG', '')):
         if source and os.path.exists(source):
             try:
                 with open(source) as f:
@@ -641,7 +641,7 @@ def echanger_code(sess, url, code):
 
 def self_install(url):
     exe_py = os.path.abspath(sys.argv[0])
-    dest = os.path.join(CONFIG_DIR, 'sentinel-agent.py')
+    dest = os.path.join(CONFIG_DIR, 'nexarc-agent.py')
     if os.path.abspath(dest) != exe_py:
         import shutil
         shutil.copy2(exe_py, dest)
@@ -652,50 +652,50 @@ def self_install(url):
               '$p=New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest;'
               '$s=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries '
               '-RestartInterval (New-TimeSpan -Minutes 1) -RestartCount 999;'
-              'Register-ScheduledTask -TaskName "SentinelAgent" -Action $a -Trigger $t -Principal $p -Settings $s -Force' % (py, dest))
+              'Register-ScheduledTask -TaskName "NexarcAgent" -Action $a -Trigger $t -Principal $p -Settings $s -Force' % (py, dest))
         return run(['powershell', '-NoProfile', '-Command', ps], 60)
     if IS_MAC:
-        plist = '/Library/LaunchDaemons/fr.sentinel.agent.plist'
+        plist = '/Library/LaunchDaemons/fr.nexarc.agent.plist'
         with open(plist, 'w') as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
                     '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>'
-                    '<key>Label</key><string>fr.sentinel.agent</string>'
+                    '<key>Label</key><string>fr.nexarc.agent</string>'
                     '<key>ProgramArguments</key><array><string>%s</string><string>%s</string></array>'
                     '<key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>\n' % (py, dest))
         os.chmod(plist, 0o644)
         run(['launchctl', 'unload', plist])
         return run(['launchctl', 'load', '-w', plist])
-    unit = '/etc/systemd/system/sentinel-agent.service'
+    unit = '/etc/systemd/system/nexarc-agent.service'
     with open(unit, 'w') as f:
-        f.write('[Unit]\nDescription=Sentinel monitoring agent\nAfter=network-online.target\nWants=network-online.target\n\n'
+        f.write('[Unit]\nDescription=NEXARC monitoring agent\nAfter=network-online.target\nWants=network-online.target\n\n'
                 '[Service]\nType=simple\nExecStart=%s %s\nRestart=always\nRestartSec=15\n\n'
                 '[Install]\nWantedBy=multi-user.target\n' % (py, dest))
     run(['systemctl', 'daemon-reload'])
-    return run(['systemctl', 'enable', '--now', 'sentinel-agent'])
+    return run(['systemctl', 'enable', '--now', 'nexarc-agent'])
 
 
 def bootstrap(a):
-    url = os.environ.get('SENTINEL_URL', a.url or '')
-    code = os.environ.get('SENTINEL_ENROLL_CODE', '')
-    site = os.environ.get('SENTINEL_SITE', a.site or 'Agents')
-    nom = os.environ.get('SENTINEL_NAME', a.name or '')
-    relais = os.environ.get('SENTINEL_RELAY', '') in ('1', 'true', 'yes')
+    url = os.environ.get('NEXARC_URL', a.url or '')
+    code = os.environ.get('NEXARC_ENROLL_CODE', '')
+    site = os.environ.get('NEXARC_SITE', a.site or 'Agents')
+    nom = os.environ.get('NEXARC_NAME', a.name or '')
+    relais = os.environ.get('NEXARC_RELAY', '') in ('1', 'true', 'yes')
     if not url or not code:
-        sys.exit('SENTINEL_URL et SENTINEL_ENROLL_CODE requis pour l\'inscription.')
+        sys.exit('NEXARC_URL et NEXARC_ENROLL_CODE requis pour l\'inscription.')
     try:
-        sess = session_http(url, pin=os.environ.get('SENTINEL_PIN'), ca=os.environ.get('SENTINEL_CA'))
+        sess = session_http(url, pin=os.environ.get('NEXARC_PIN'), ca=os.environ.get('NEXARC_CA'))
     except ValueError as e:
-        sys.exit('SENTINEL_PIN : %s' % e)
+        sys.exit('NEXARC_PIN : %s' % e)
     print('→ Inscription auprès de %s' % url)
     try:
         token = echanger_code(sess, url, code)
     except (requests.RequestException, RuntimeError, ValueError) as e:
         sys.exit('inscription impossible : %s' % e)
     cfg = {'url': url.rstrip('/'), 'token': token, 'site': site, 'name': nom, 'relais': relais}
-    if os.environ.get('SENTINEL_PIN'):
-        cfg['pin'] = os.environ['SENTINEL_PIN']
-    if os.environ.get('SENTINEL_CA'):
-        cfg['ca'] = os.environ['SENTINEL_CA']
+    if os.environ.get('NEXARC_PIN'):
+        cfg['pin'] = os.environ['NEXARC_PIN']
+    if os.environ.get('NEXARC_CA'):
+        cfg['ca'] = os.environ['NEXARC_CA']
     try:
         ecrire_config(cfg)
     except OSError as e:
@@ -746,30 +746,30 @@ def boucle(cfg, a):
             cycle += 1
             r = sess.post(base + '/api/ingest', json=payload, headers=headers, timeout=30)
             if r.status_code == 200:
-                print('[sentinel-agent] ok  cpu=%s%% ram=%s%%' % (payload['cpu'], payload['ram']))
+                print('[nexarc-agent] ok  cpu=%s%% ram=%s%%' % (payload['cpu'], payload['ram']))
             elif r.status_code == 401:
-                print('[sentinel-agent] 401 — jeton refusé ; réinscription nécessaire.')
+                print('[nexarc-agent] 401 — jeton refusé ; réinscription nécessaire.')
                 time.sleep(ATTENTE_JETON_REFUSE)
                 continue
             else:
-                print('[sentinel-agent] serveur %s' % r.status_code)
+                print('[nexarc-agent] serveur %s' % r.status_code)
         except requests.RequestException as e:
-            print('[sentinel-agent] remontée échouée :', e)
+            print('[nexarc-agent] remontée échouée :', e)
         try:
             if poll_jobs(sess, base, headers, a.job_timeout):
                 cycle = inv_tous
         except requests.RequestException as e:
-            print('[sentinel-agent] tâches :', e)
+            print('[nexarc-agent] tâches :', e)
         time.sleep(max(5, a.interval))
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--url', default=os.environ.get('SENTINEL_URL'))
-    p.add_argument('--site', default=os.environ.get('SENTINEL_SITE', 'Agents'))
-    p.add_argument('--name', default=os.environ.get('SENTINEL_NAME', ''))
-    p.add_argument('--interval', type=int, default=int(os.environ.get('SENTINEL_INTERVAL', '30')))
-    p.add_argument('--job-timeout', dest='job_timeout', type=int, default=int(os.environ.get('SENTINEL_JOB_TIMEOUT', '120')))
+    p.add_argument('--url', default=os.environ.get('NEXARC_URL'))
+    p.add_argument('--site', default=os.environ.get('NEXARC_SITE', 'Agents'))
+    p.add_argument('--name', default=os.environ.get('NEXARC_NAME', ''))
+    p.add_argument('--interval', type=int, default=int(os.environ.get('NEXARC_INTERVAL', '30')))
+    p.add_argument('--job-timeout', dest='job_timeout', type=int, default=int(os.environ.get('NEXARC_JOB_TIMEOUT', '120')))
     p.add_argument('--enroller', action='store_true', help='échanger le code, ranger le jeton, poser le service')
     p.add_argument('--once', action='store_true', help='une remontée puis quitter (auto-test)')
     a = p.parse_args()
@@ -779,7 +779,7 @@ def main():
         return
     cfg = lire_config()
     if not cfg:
-        sys.exit('Aucune configuration : lance d\'abord --enroller (SENTINEL_URL + SENTINEL_ENROLL_CODE).')
+        sys.exit('Aucune configuration : lance d\'abord --enroller (NEXARC_URL + NEXARC_ENROLL_CODE).')
     if a.once:
         sess = session_http(cfg['url'], pin=cfg.get('pin'), ca=cfg.get('ca'))
         payload = collect(cfg.get('site', 'Agents'), cfg.get('name', ''), cfg.get('relais', False))

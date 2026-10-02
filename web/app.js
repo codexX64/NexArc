@@ -1,4 +1,4 @@
-// Interface de Sentinel : parc, fiche d'une machine, tâches, automatisations,
+// Interface de NEXARC : parc, fiche d'une machine, tâches, automatisations,
 // consoles, inscription, réglages. La porte du socle gère la connexion ; tout ce
 // qui suit suppose une session complète, et le serveur revérifie chaque droit.
 //
@@ -9,7 +9,7 @@ import {
 } from '/socle/compte.js';
 
 appliquerTheme();
-const SERVICE = 'Sentinel';
+const SERVICE = 'NEXARC';
 const api = new Api({ surDeconnexion: () => location.reload() });
 const etat = await porte({ api, service: SERVICE, sousTitre: 'supervision du parc' });
 const moi = etat.session.compte;
@@ -197,7 +197,7 @@ async function pageMachines() {
   q.addEventListener('input', peindre);
   peindre();
   return h('div', { class: 'page' },
-    h('div', { class: 'headrow' }, h('div', {}, h('h1', { class: 'title', text: 'Postes' }), h('p', { class: 'lede', text: 'Chaque poste exécute l\'agent Sentinel et remonte son état.' })),
+    h('div', { class: 'headrow' }, h('div', {}, h('h1', { class: 'title', text: 'Postes' }), h('p', { class: 'lede', text: 'Chaque poste exécute l\'agent NEXARC et remonte son état.' })),
       h('div', { class: 'actions' }, peutAgir ? h('button', { class: 'btn solid', type: 'button', onclick: () => dialogueInscription(false) }, icone('plus', 15), 'Ajouter un poste') : null)),
     h('div', { class: 'card' }, h('div', { class: 'pad rowline' }, chips, q, compte),
       h('div', { class: 'tw' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Poste' }), h('th', { class: 'cache-m', text: 'Site' }), h('th', { class: 'cache-l', text: 'Système' }), h('th', { class: 'cache-l', text: 'CPU' }), h('th', { class: 'cache-s', text: 'Risque' }), h('th', { text: 'État' }))), corps))));
@@ -340,7 +340,7 @@ async function pageReglages() {
     h('div', { class: 'headrow' }, h('div', {}, h('h1', { class: 'title', text: 'Réglages' }), h('p', { class: 'lede', text: 'Configuration de cette instance. Le compte et la sécurité sont dans la page Sécurité.' }))),
     h('div', { class: 'grille' },
       h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'Supervision' })), h('div', { class: 'cardbody' }, kv('Intervalle de collecte', s.collect_interval + ' s'), kv('Hors ligne après', s.offline_after + ' s'), kv('Agents réels enrôlés', String(s.real_agents)), kv('Commande libre', s.exec ? 'activée' : 'désactivée'))),
-      h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'Seuils des alertes' }), h('span', { class: 'note', text: 'SENTINEL_ALERT_*' })), h('div', { class: 'cardbody' },
+      h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'Seuils des alertes' }), h('span', { class: 'note', text: 'NEXARC_ALERT_*' })), h('div', { class: 'cardbody' },
         kv('Hors ligne au-delà de', s.alertes.hors_ligne_min + ' min'), kv('Correctifs de sécurité en attente', 'plus de ' + s.alertes.correctifs_jours + ' j'),
         kv('Disque rempli à', s.alertes.disque_pct + ' %'), kv('Score de risque', s.alertes.risque + ' / 100'))),
       h('div', { class: 'card' }, h('header', {}, h('h2', { text: 'Réveil réseau (Wake-on-LAN)' }), h('span', { class: 'note', text: 'couverture par sous-réseau' })), couverture),
@@ -597,7 +597,7 @@ function blocRedfish(m) {
   peindre();
   return h('div', { class: 'cons-add' },
     h('b', { class: 'fs12', text: 'Contrôle d\'alimentation (Redfish)' }),
-    h('p', { class: 'hint mt0', text: 'Identifiants de la carte iDRAC / iLO / BMC : allumer, arrêter et redémarrer depuis Sentinel, sans licence Enterprise.' }),
+    h('p', { class: 'hint mt0', text: 'Identifiants de la carte iDRAC / iLO / BMC : allumer, arrêter et redémarrer depuis NEXARC, sans licence Enterprise.' }),
     h('div', { class: 'row2' }, user, mdp), url, actions, etat);
 }
 
@@ -631,7 +631,7 @@ async function gererConsoles(m) {
   peindreListe();
   await dialogue({ titre: `Accès distants — ${m.host}`, large: true,
     contenu: [liste, h('div', { class: 'cons-add' },
-      h('div', { class: 'row2' }, typeSel, label), cible, vncpw, h('label', { class: 'chk mt9' }, embed, h('span', { text: 'Afficher dans Sentinel (sinon : nouvel onglet)' })), hint,
+      h('div', { class: 'row2' }, typeSel, label), cible, vncpw, h('label', { class: 'chk mt9' }, embed, h('span', { text: 'Afficher dans NEXARC (sinon : nouvel onglet)' })), hint,
       h('div', { class: 'pad pt10' }, h('button', { class: 'btn solid plein', type: 'button', text: 'Ajouter l\'accès', onclick: async () => {
         const t = cible.value.trim(); if (!t) { err.textContent = 'Renseigne l\'URL ou le node.'; return; }
         const acces = { type: typeSel.value, target: t, label: label.value.trim(), embed: embed.checked };
@@ -661,8 +661,8 @@ async function dialogueInscription(relais) {
   const copier = cmd => navigator.clipboard?.writeText(cmd).then(() => toast('Commande copiée.'), () => toast('Copie impossible.', true));
   const AIDE = {
     windows: { fichier: 'Télécharger l’installateur (.exe)', etapes: 'Double-clique sur le fichier : Windows demande l’accord d’un administrateur, puis l’agent s’installe, Python compris s’il manque. L’installateur n’est pas signé : si SmartScreen s’affiche, « Informations complémentaires » puis « Exécuter quand même ».', ligne: 'Ou colle dans PowerShell, ouvert en administrateur :' },
-    macos: { fichier: 'Télécharger l’installateur (.zip)', etapes: 'Ouvre l’archive, puis clic droit sur « Installer Sentinel » et « Ouvrir » (un fichier non signé ne s’ouvre pas d’un double-clic). Le Terminal demande le mot de passe d’un administrateur. Sans Python 3 sur le Mac, lance d’abord « xcode-select --install ».', ligne: 'Ou colle dans le Terminal :' },
-    linux: { fichier: 'Télécharger le script (.sh)', etapes: 'Lance-le avec « sudo bash installer-sentinel.sh ». Debian, Ubuntu, Fedora et Arch : Python est installé s’il manque.', ligne: 'Ou colle dans un terminal :' },
+    macos: { fichier: 'Télécharger l’installateur (.zip)', etapes: 'Ouvre l’archive, puis clic droit sur « Installer NEXARC » et « Ouvrir » (un fichier non signé ne s’ouvre pas d’un double-clic). Le Terminal demande le mot de passe d’un administrateur. Sans Python 3 sur le Mac, lance d’abord « xcode-select --install ».', ligne: 'Ou colle dans le Terminal :' },
+    linux: { fichier: 'Télécharger le script (.sh)', etapes: 'Lance-le avec « sudo bash installer-nexarc.sh ». Debian, Ubuntu, Fedora et Arch : Python est installé s’il manque.', ligne: 'Ou colle dans un terminal :' },
   };
   const peindreZone = () => {
     if (!info) { zone.replaceChildren(h('p', { class: 'hint', text: 'Génération du code…' })); return; }
@@ -673,8 +673,8 @@ async function dialogueInscription(relais) {
     try { hote = new URL(info.base_url).hostname; } catch { /* adresse déjà refusée par le serveur */ }
     const locale = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(hote);
     zone.replaceChildren(...[
-      locale ? h('div', { class: 'note warn mt10' }, icone('alerte'), h('div', { text: `Les postes joindraient Sentinel à ${info.base_url}, une adresse qui ne mène qu’à ta propre machine. Renseigne « Adresse publique de Sentinel » dans ses réglages du Hub (son adresse sur le réseau, ex. http://192.0.2.10:8090), puis rouvre ce dialogue.` })) : null,
-      !locale && info.base_url.startsWith('http:') ? h('p', { class: 'hint', text: 'Sentinel est joint en HTTP : le jeton de l’agent passe en clair sur le réseau. Sers-le en HTTPS dès que possible (action H1 de SECURITY.md).' }) : null,
+      locale ? h('div', { class: 'note warn mt10' }, icone('alerte'), h('div', { text: `Les postes joindraient NEXARC à ${info.base_url}, une adresse qui ne mène qu’à ta propre machine. Renseigne « Adresse publique de NEXARC » dans ses réglages du Hub (son adresse sur le réseau, ex. http://192.0.2.10:8090), puis rouvre ce dialogue.` })) : null,
+      !locale && info.base_url.startsWith('http:') ? h('p', { class: 'hint', text: 'NEXARC est joint en HTTP : le jeton de l’agent passe en clair sur le réseau. Sers-le en HTTPS dès que possible (action H1 de SECURITY.md).' }) : null,
       h('div', { class: 'installe mt10' },
         h('a', { class: 'btn solid', href: telechargement.pathname + telechargement.search, download: '' }, icone('telecharge', 15), a.fichier),
         h('p', { class: 'hint', text: a.etapes })),
@@ -716,7 +716,7 @@ async function dialogueKvm() {
     contenu: [h('p', { class: 'hint mt0', text: 'Accès écran, clavier et BIOS/UEFI sans agent, même serveur éteint.' }),
       h('div', { class: 'row2' }, host, ip), h('div', { class: 'mt9' }, typeSel),
       h('label', { class: 'champ mt9' }, h('span', { class: 'lbl', text: 'Parc / site' }), site), cible,
-      h('label', { class: 'chk mt9' }, embed, h('span', { text: 'Afficher dans Sentinel' })), err],
+      h('label', { class: 'chk mt9' }, embed, h('span', { text: 'Afficher dans NEXARC' })), err],
     boutons: [{ texte: 'Annuler', classe: 'flat', valeur: false }, { texte: 'Ajouter le matériel', classe: 'solid', agir: async () => {
       if (!host.value.trim()) { err.textContent = 'Donne un nom.'; return false; }
       if (!cible.value.trim()) { err.textContent = 'Renseigne l\'adresse de la console.'; return false; }
