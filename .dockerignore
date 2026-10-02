@@ -15,3 +15,5 @@ hub.json
 secrets
 data
 **/__pycache__
+agent/installateur-windows/*.exe
+agent/installateur-windows/*.res

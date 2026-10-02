@@ -179,7 +179,7 @@ test('autorisation : chaque route balayée sans session, en lecture seule et en 
   // Les seules routes sans session : la sonde de santé, et ce qu'un agent
   // appelle avec son code d'inscription ou son jeton (vérifiés dans la route).
   const publiques = s.api.routeur.routes.filter(r => r.options?.public).map(r => `${r.methode} ${cheminDe(r)}`).sort();
-  assert.deepEqual(publiques, ['GET /api/enroll/agent.py', 'GET /api/enroll/requirements.txt', 'GET /api/enroll/script', 'GET /api/health',
+  assert.deepEqual(publiques, ['GET /api/enroll/agent.py', 'GET /api/enroll/installateur', 'GET /api/enroll/requirements.txt', 'GET /api/enroll/script', 'GET /api/health',
     'POST /api/agent/jobs', 'POST /api/agent/jobs/AAAAAAAAAAAAAAAA/result', 'POST /api/enroll/config', 'POST /api/ingest']);
   // Aucun GET ne change l'état : tirer un code, l'échanger et relever ses tâches sont des POST.
   for (const chemin of ['/api/enroll/info', '/api/enroll/config', '/api/agent/jobs']) assert.equal((await membre.get(chemin)).status, 405, `GET ${chemin}`);
@@ -1031,7 +1031,7 @@ test('sonde TLS : admin + renfort seulement, aucun octet applicatif, empreinte e
 
 test('inscription : scripts Windows (Python + venv), Linux et macOS ; valeurs piégées refusées', async () => {
   const info = (await membre.post('/api/enroll/info', { site: 'Prod', name: 'serveur-a' })).json;
-  assert.match(info.commands.windows, /^powershell -ExecutionPolicy Bypass -Command "irm '[^']+&name=serveur-a' \| iex"$/);
+  assert.match(info.commands.windows, /^powershell -ExecutionPolicy Bypass -Command "\[Net\.ServicePointManager\]::SecurityProtocol = \[Net\.ServicePointManager\]::SecurityProtocol -bor 3072; irm '[^']+&name=serveur-a' \| iex"$/);
   assert.match(info.commands.linux, /&name=serveur-a' \| sudo bash$/);
   const anon = s.client();
   const w = await anon.get(`/api/enroll/script?os=windows&code=${info.code}&site=Prod&name=serveur-a`);
@@ -1066,6 +1066,63 @@ test('inscription : scripts Windows (Python + venv), Linux et macOS ; valeurs pi
   }
   assert.equal(s.parc.db.prepare('SELECT COUNT(*) n FROM enrolements').get().n, avant, 'aucun code tiré pour une demande refusée');
   assert.equal((await membre.get('/api/enroll/script?os=__proto__&code=AAAAAAAAAAAA')).status, 404);
+});
+
+const octets = (port, chemin) => new Promise((resolve, reject) => {
+  http.get({ host: '127.0.0.1', port, path: chemin, headers: { host: `localhost:${port}` } }, r => {
+    const morceaux = [];
+    r.on('data', d => morceaux.push(d));
+    r.on('end', () => resolve({ status: r.statusCode, entetes: r.headers, corps: Buffer.concat(morceaux) }));
+  }).on('error', reject);
+});
+
+test('inscription : installateurs à télécharger (exécutable Windows, archive macOS, script Linux), même script que la commande', async () => {
+  const info = (await membre.post('/api/enroll/info', { site: 'Prod', name: 'serveur-a' })).json;
+  const anon = s.client();
+  for (const systeme of ['windows', 'macos', 'linux']) assert.match(info.downloads[systeme], new RegExp(`/api/enroll/installateur\\?os=${systeme}&code=${info.code}&site=Prod&name=serveur-a$`));
+  const script = async systeme => (await anon.get(`/api/enroll/script?os=${systeme}&code=${info.code}&site=Prod&name=serveur-a`)).texte;
+  const dossier = fs.mkdtempSync(path.join(base, 'installateurs-'));
+
+  const linux = await octets(anon.port, `/api/enroll/installateur?os=linux&code=${info.code}&site=Prod&name=serveur-a`);
+  assert.equal(linux.status, 200);
+  assert.match(linux.entetes['content-disposition'], /filename="installer-sentinel\.sh"/);
+  assert.equal(linux.corps.toString('utf8'), await script('linux'));
+
+  // macOS : une archive que unzip lit, le fichier exécutable, le script intact dedans.
+  const mac = await octets(anon.port, `/api/enroll/installateur?os=macos&code=${info.code}&site=Prod&name=serveur-a`);
+  assert.equal(mac.status, 200);
+  assert.equal(mac.entetes['content-type'], 'application/zip');
+  fs.writeFileSync(path.join(dossier, 'mac.zip'), mac.corps);
+  execFileSync('unzip', ['-q', path.join(dossier, 'mac.zip'), '-d', path.join(dossier, 'mac')]);
+  const commande = path.join(dossier, 'mac', 'Installer Sentinel.command');
+  assert.ok(fs.statSync(commande).mode & 0o111, 'le fichier .command garde son droit d’exécution');
+  const texte = fs.readFileSync(commande, 'utf8');
+  assert.ok(texte.includes(await script('macos')), 'le script de la commande, tel quel');
+  assert.match(texte, /sudo \/bin\/bash "\$TMP"/);
+  execFileSync('bash', ['-n', commande]);
+
+  // Windows : l'exécutable de l'image, suivi de l'adresse du script, de sa longueur et de la marque.
+  const exe = path.join(import.meta.dirname, '..', 'agent', 'installateur-windows', 'installateur-sentinel.exe');
+  const win = await octets(anon.port, `/api/enroll/installateur?os=windows&code=${info.code}&site=Prod&name=serveur-a`);
+  if (fs.existsSync(exe)) {
+    const executable = fs.readFileSync(exe);
+    assert.equal(win.status, 200);
+    assert.match(win.entetes['content-disposition'], /filename="installer-sentinel\.exe"/);
+    assert.ok(win.corps.subarray(0, executable.length).equals(executable), 'l’exécutable compilé, inchangé');
+    assert.equal(win.corps.subarray(-8).toString('latin1'), 'SNTLINS1');
+    const n = win.corps.readUInt32LE(win.corps.length - 12);
+    const adresse = win.corps.subarray(win.corps.length - 12 - n, win.corps.length - 12).toString('utf8');
+    assert.equal(executable.length + n + 12, win.corps.length);
+    assert.equal(adresse, info.commands.windows.match(/irm '([^']+)'/)[1], 'la même adresse que la commande PowerShell');
+    assert.match(adresse, /^[A-Za-z0-9:/._~?&=%+\-\[\]]+$/, 'rien que l’exécutable refuserait');
+  } else {
+    assert.equal(win.status, 503, 'sans exécutable compilé, un refus qui renvoie à la commande');
+  }
+  // Mêmes contrôles que le script : code inconnu sans session refusé, système inconnu introuvable.
+  assert.equal((await octets(anon.port, '/api/enroll/installateur?os=linux&code=AAAAAAAAAAAAAAAAAAAAAA')).status, 401);
+  assert.equal((await membre.get(`/api/enroll/installateur?os=__proto__&code=${info.code}`)).status, 404);
+  assert.equal((await membre.get(`/api/enroll/installateur?os=linux&code=${encodeURIComponent("x';id;'")}`)).status, 422);
+  assert.equal((await anon.post('/api/enroll/config', { code: info.code })).status, 200, 'télécharger les installateurs ne consomme pas le code');
 });
 
 test('rotation de SOCLE_CLE : secrets d\'appareils rescellés, jetons d\'agents intacts ; secret resté sous l\'ancienne clé : arrêt tant qu\'elle manque', async () => {

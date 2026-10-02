@@ -421,7 +421,7 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const commands = {}, downloads = {};
     for (const os of ['windows', 'macos', 'linux']) {
       commands[os] = enroll.uneLigne(os, base, code, { site, nom, relais });
-      downloads[os] = `${base}/api/enroll/script?os=${os}&code=${code}&site=${encodeURIComponent(site)}&name=${encodeURIComponent(nom)}${relais ? '&relais=1' : ''}`;
+      downloads[os] = enroll.urlScript(os, base, code, { site, nom, relais }).replace('/api/enroll/script?', '/api/enroll/installateur?');
     }
     return { base_url: base, code, expire_dans, site, name: nom, sites, commands, downloads, agent_url: `${base}/api/enroll/agent.py?code=${code}` };
   }, { role: 'membre' });
@@ -468,6 +468,34 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     const body = builder(baseUrl(ctx), code, { site, nom, relais });
     ctx.res.writeHead(200, { 'Content-Type': media, 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${fichier}"` });
     ctx.res.end(body);
+    return undefined;
+  }, { public: true, requete: S.script });
+
+  // L'installateur à télécharger : le même script, emballé pour un double-clic.
+  r.get('/api/enroll/installateur', ctx => {
+    const q = ctx.q;
+    const code = codeOuSession(ctx, q.code);
+    if (!Object.hasOwn(enroll.INSTALLATEURS, q.os)) throw new ErreurHttp(404, 'Système non supporté.');
+    const site = q.site.trim() || 'Agents';
+    const nom = q.name.trim();
+    const relais = q.relais === '1';
+    const defaut = enroll.controler(baseUrl(ctx), { code, site, nom });
+    if (defaut) throw new ErreurHttp(422, defaut);
+    let corpsFichier;
+    if (q.os === 'windows') {
+      let executable;
+      try { executable = fs.readFileSync(path.join(racine, 'agent', 'installateur-windows', 'installateur-sentinel.exe')); } catch {
+        throw new ErreurHttp(503, 'Installateur Windows absent de cette image : la commande PowerShell fait la même chose.');
+      }
+      corpsFichier = enroll.installateurWindows(executable, enroll.urlScript('windows', baseUrl(ctx), code, { site, nom, relais }));
+    } else {
+      const [builder] = enroll.BUILDERS[q.os];
+      const script = builder(baseUrl(ctx), code, { site, nom, relais });
+      corpsFichier = q.os === 'macos' ? enroll.installateurMacos(script) : Buffer.from(script, 'utf8');
+    }
+    const { fichier, media } = enroll.INSTALLATEURS[q.os];
+    ctx.res.writeHead(200, { 'Content-Type': media, 'Content-Length': corpsFichier.length, 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${fichier}"`, 'X-Content-Type-Options': 'nosniff' });
+    ctx.res.end(corpsFichier);
     return undefined;
   }, { public: true, requete: S.script });
 

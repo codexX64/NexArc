@@ -4,6 +4,16 @@
 # (index multi-architecture amd64 + arm64) : une étiquette peut être déplacée,
 # une empreinte non.
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+
+# L'installateur Windows de l'agent : compilé ici, depuis sa source, par
+# MinGW-w64 ; sortie déterministe (aucune date dans l'en-tête PE).
+FROM ${NODE_IMAGE} AS installateur-windows
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-win32 binutils-mingw-w64-x86-64 \
+ && rm -rf /var/lib/apt/lists/*
+COPY agent/installateur-windows /src
+RUN sh /src/construire.sh && sha256sum /src/installateur-sentinel.exe
+
 FROM ${NODE_IMAGE}
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates tzdata \
@@ -16,6 +26,7 @@ COPY src ./src
 COPY web ./web
 # La source de l'agent, servie aux postes pendant l'inscription (jamais exécutée ici).
 COPY agent ./agent
+COPY --from=installateur-windows /src/installateur-sentinel.exe ./agent/installateur-windows/installateur-sentinel.exe
 RUN mkdir -p /data && chown sentinel:sentinel /data && chmod 700 /data
 USER sentinel
 ENV NODE_ENV=production DATA_DIR=/data PORT=8090

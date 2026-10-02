@@ -1,5 +1,8 @@
 // Inscription d'un poste : scripts prêts à lancer qui installent l'agent (Python
-// et son environnement virtuel), et la commande d'une ligne qui les télécharge.
+// et son environnement virtuel), la commande d'une ligne qui les télécharge, et
+// un installateur à télécharger par système (exécutable Windows, archive macOS
+// avec un fichier à double-cliquer, script Linux) qui lance le même script.
+import zlib from 'node:zlib';
 //
 // Le code d'inscription (128 bits, à usage unique, lié au site) est le seul secret
 // transporté ; l'agent l'échange lui-même contre SON jeton, qu'il range dans un
@@ -136,11 +139,79 @@ export const BUILDERS = {
   windows: [scriptWindows, 'installer-sentinel.ps1', 'text/plain'],
 };
 
-export function uneLigne(os, base, code, { site = '', nom = '', relais = false } = {}) {
+// L'adresse du script d'installation, code compris. Ses valeurs ont passé
+// controler() : rien n'y sort des apostrophes de bash ou de PowerShell.
+export function urlScript(os, base, code, { site = '', nom = '', relais = false } = {}) {
   let url = `${sansBarreFinale(base)}/api/enroll/script?os=${os}&code=${code}`;
   if (site) url += `&site=${encodeURIComponent(site)}`;
   if (nom) url += `&name=${encodeURIComponent(nom)}`;
   if (relais) url += '&relais=1';
-  if (os === 'windows') return `powershell -ExecutionPolicy Bypass -Command "irm '${url}' | iex"`;
+  return url;
+}
+
+export function uneLigne(os, base, code, options = {}) {
+  const url = urlScript(os, base, code, options);
+  // TLS 1.2 au moins, même sous un .NET ancien qui proposerait encore TLS 1.0.
+  if (os === 'windows') return `powershell -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm '${url}' | iex"`;
   return `curl -fsSL '${url}' | sudo bash`;
 }
+
+// Windows : l'exécutable générique (agent/installateur-windows), suivi de
+// l'adresse du script, de sa longueur et d'une marque. L'exécutable relit
+// cette fin, revérifie l'adresse et lance le script avec élévation.
+export const MARQUE_WINDOWS = Buffer.from('SNTLINS1', 'latin1');
+export function installateurWindows(executable, url) {
+  const adresse = Buffer.from(url, 'utf8');
+  const longueur = Buffer.alloc(4);
+  longueur.writeUInt32LE(adresse.length);
+  return Buffer.concat([executable, adresse, longueur, MARQUE_WINDOWS]);
+}
+
+// macOS : une archive zip qui garde le droit d'exécution du fichier
+// « .command » (un fichier téléchargé seul le perd, et le Finder refuse alors
+// de l'ouvrir). Le fichier relance le script dans le Terminal, sous sudo.
+export function installateurMacos(script) {
+  const commande = `#!/bin/bash
+# Sentinel - installation de l'agent sur ce Mac. Double-clique : le Terminal
+# s'ouvre et demande le mot de passe d'un administrateur.
+cd "$(dirname "$0")"
+TMP="$(mktemp -t sentinel-installation)"
+trap 'rm -f "$TMP"' EXIT
+cat > "$TMP" <<'SENTINEL_FIN_DU_SCRIPT'
+${script}SENTINEL_FIN_DU_SCRIPT
+sudo /bin/bash "$TMP"
+echo
+read -r -p "Appuie sur Entrée pour fermer." _
+`;
+  return zipUnFichier('Installer Sentinel.command', Buffer.from(commande, 'utf8'), 0o755);
+}
+
+// Une archive zip d'un seul fichier, stocké sans compression (la méthode 0 que
+// tout outil lit), avec ses droits Unix dans les attributs externes.
+function zipUnFichier(nom, donnees, mode) {
+  const n = Buffer.from(nom, 'utf8');
+  const crc = zlib.crc32(donnees);
+  // 1er janvier 2026, 00:00 : l'archive ne change pas d'un téléchargement à l'autre.
+  const heure = 0, date = ((2026 - 1980) << 9) | (1 << 5) | 1;
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0x0800, 6); local.writeUInt16LE(0, 8);
+  local.writeUInt16LE(heure, 10); local.writeUInt16LE(date, 12); local.writeUInt32LE(crc, 14);
+  local.writeUInt32LE(donnees.length, 18); local.writeUInt32LE(donnees.length, 22); local.writeUInt16LE(n.length, 26); local.writeUInt16LE(0, 28);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE((3 << 8) | 20, 4); central.writeUInt16LE(20, 6); central.writeUInt16LE(0x0800, 8);
+  central.writeUInt16LE(0, 10); central.writeUInt16LE(heure, 12); central.writeUInt16LE(date, 14); central.writeUInt32LE(crc, 16);
+  central.writeUInt32LE(donnees.length, 20); central.writeUInt32LE(donnees.length, 24); central.writeUInt16LE(n.length, 28);
+  central.writeUInt16LE(0, 30); central.writeUInt16LE(0, 32); central.writeUInt16LE(0, 34); central.writeUInt16LE(0, 36);
+  central.writeUInt32LE(((0o100000 | mode) << 16) >>> 0, 38); central.writeUInt32LE(0, 42);
+  const debutCentral = local.length + n.length + donnees.length;
+  const fin = Buffer.alloc(22);
+  fin.writeUInt32LE(0x06054b50, 0); fin.writeUInt16LE(1, 8); fin.writeUInt16LE(1, 10);
+  fin.writeUInt32LE(central.length + n.length, 12); fin.writeUInt32LE(debutCentral, 16);
+  return Buffer.concat([local, n, donnees, central, n, fin]);
+}
+
+export const INSTALLATEURS = {
+  windows: { fichier: 'installer-sentinel.exe', media: 'application/vnd.microsoft.portable-executable' },
+  macos: { fichier: 'installer-sentinel-macos.zip', media: 'application/zip' },
+  linux: { fichier: 'installer-sentinel.sh', media: 'text/x-shellscript' },
+};
