@@ -109,7 +109,7 @@ export async function demarrer(env = process.env, { log = CONSOLE } = {}) {
       if (!['GET', 'HEAD'].includes(req.method)) return repondreJson(res, 405, { error: 'Méthode non admise.' });
       if (url.pathname.startsWith('/socle/') && servirFichier(req, res, path.join(RACINE, 'socle', 'web'), url.pathname.slice(6), { nonce, cache: 'public, max-age=3600' })) return;
       const fichier = url.pathname === '/' ? '/index.html' : url.pathname;
-      if (servirFichier(req, res, path.join(RACINE, 'web'), fichier, { nonce })) return;
+      if (servirFichier(req, res, path.join(RACINE, 'web'), fichier, { nonce, gamme: socle.cfg.gamme })) return;
       repondreJson(res, 404, { error: 'Introuvable.' });
     } catch (e) { repondreErreur(res, e, { journal: log }); }
   }));

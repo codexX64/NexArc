@@ -1148,3 +1148,12 @@ test('pont VNC de bout en bout : mise à niveau WebSocket sous session, mot de p
     ws.close();
   } finally { await rfb.fermer(); }
 });
+
+test('thème : la page porte la gamme posée par la page Thème du Hub ; SOMA hors Hub', async () => {
+  assert.match((await s.client().get('/')).texte, /<html lang="fr" data-gamme="soma">/);
+  const x = await lancer(fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-gamme-')), { SOCLE_THEME: 'console' });
+  try { assert.match((await x.client().get('/')).texte, /data-gamme="console"/); } finally { await x.arreter(); }
+  const lire = f => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+  assert.match(lire('deploy/compose.hub.yml'), /^ {6}SOCLE_THEME: "\{\{hub\.theme\}\}"$/m);
+  assert.equal(JSON.parse(lire('hub.json')).minHubVersion, '0.7.0', '{{hub.theme}} vient avec le Hub 0.7.0');
+});

@@ -339,6 +339,7 @@ socle.
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `SENTINEL_HUB_TOKEN` | jeton du Hub : état, tâches, réveils — jamais les comptes ni les réglages | — |
+| `SOCLE_THEME` | gamme de l'interface : `soma` ou `console` (noir et vert, ou blanc et bleu) ; dans le Hub, choisie dans la page Thème | `soma` |
 | `SENTINEL_ALLOW_EXEC` | `1` autorise la commande libre, en tâche comme en automatisation (toujours admin + confirmation récente) ; à `0`, une automatisation « commande libre » existante ne s'exécute plus | `0` |
 | `SENTINEL_MAX_MACHINES` | plafond de machines | `5000` |
 | `SENTINEL_INGEST_MINUTE` | remontées d'agent par minute et par IP | `240` |
