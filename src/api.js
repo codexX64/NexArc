@@ -111,6 +111,21 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
     if (cfg.jetonHub && egal(h.slice(7), cfg.jetonHub)) return true;
     return refuserPreuve(ctx, 'Jeton de service invalide.');
   };
+  // Lecture du parc par un service voisin (VIGIE) : jeton dérivé par le Hub,
+  // cer_<nom>_<hmac(jeton du Hub)>, vérifié par le même calcul sans rien
+  // stocker. Il n'ouvre que l'état et le résumé, jamais une action.
+  const estLecteur = ctx => {
+    const h = String(ctx.req.headers.authorization || '');
+    const m = /^Bearer (cer_([a-z0-9][a-z0-9-]{1,30})_([0-9a-f]{64}))$/.exec(h);
+    if (!m) return estHub(ctx);
+    controlerEchecs(ctx);
+    if (cfg.jetonHub) {
+      const attendu = crypto.createHmac('sha256', cfg.jetonHub).update('cerveau:' + m[2]).digest();
+      const recu = Buffer.from(m[3], 'hex');
+      if (recu.length === attendu.length && crypto.timingSafeEqual(recu, attendu)) return true;
+    }
+    return refuserPreuve(ctx, 'Jeton de service invalide.');
+  };
   const session = (ctx, opts = {}) => portail.exiger(ctx, { role: 'lecture', ...opts });
   const carteEnEchec = (quoi, m) => e => {
     const ref = crypto.randomBytes(4).toString('hex');
@@ -127,8 +142,8 @@ export function creerApi({ socle, cfg, db, parc, agents, alertes, taches, synaps
 
   r.get('/api/health', ctx => repondreJson(ctx.res, 200, { ok: true }), { public: true });
 
-  r.get('/api/state', ctx => { if (!estHub(ctx)) session(ctx); return etatParc(); }, { hub: true, role: 'lecture' });
-  r.get('/api/summary', ctx => { if (!estHub(ctx)) session(ctx); return parc.resume(); }, { hub: true, role: 'lecture' });
+  r.get('/api/state', ctx => { if (!estLecteur(ctx)) session(ctx); return etatParc(); }, { hub: true, role: 'lecture' });
+  r.get('/api/summary', ctx => { if (!estLecteur(ctx)) session(ctx); return parc.resume(); }, { hub: true, role: 'lecture' });
   r.post('/api/collect', ctx => { session(ctx, { role: 'membre' }); for (const l of agents.collecter()) flux.pousser({ t: 'flux', ...l }); return etatParc(); }, { role: 'membre' });
 
   // Flux d'activité en direct (SSE), à la place du sondage de la 1.x.

@@ -1237,3 +1237,16 @@ test('comptes depuis le Hub : manifeste et Compose relient le jeton d’administ
     assert.notEqual((await c.get('/api/machines', porteur(jeton))).status, 200, 'le jeton d’administration n’ouvre pas l’API');
   } finally { await x.arreter(); }
 });
+
+test('jeton dérivé par le Hub (VIGIE) : lit l’état et le résumé, rien d’autre ; une signature fausse est refusée', async () => {
+  const derive = (secret, nom) => `cer_${nom}_${crypto.createHmac('sha256', secret).update('cerveau:' + nom).digest('hex')}`;
+  const porteur = j => ({ entetes: { authorization: `Bearer ${j}` }, origine: null });
+  const bon = porteur(derive(JETON_HUB, 'vigie'));
+  const etat = await s.client().req('GET', '/api/state', undefined, bon);
+  assert.equal(etat.status, 200);
+  assert.ok(Array.isArray(etat.json.machines));
+  assert.equal((await s.client().req('GET', '/api/summary', undefined, bon)).status, 200);
+  assert.equal((await s.client().req('GET', '/api/state', undefined, porteur(derive('une-autre-semence-assez-longue', 'vigie')))).status, 401);
+  const mref = refMachineParHote('poste-charges');
+  assert.equal((await s.client().req('POST', `/api/machines/${mref}/jobs`, { kind: 'inventory', payload: '' }, bon)).status, 401, 'aucune action');
+});
